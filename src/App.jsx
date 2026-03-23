@@ -831,7 +831,85 @@ const TournamentOrganizerDashboard = ({ user, onLogout }) => {
 };
 
 const TeamManagerDashboard = ({ user, onLogout }) => {
-  const [page, setPage] = useState("overview");
+  const [page, setPage]           = useState("overview");
+  const [players, setPlayers]     = useState([
+    { id:1, name:"James Kamau",   dob:"2000-01-15", phone:"+254721000001", jersey:1,  position:"Loosehead Prop", kin_name:"Mary Kamau",   kin_phone:"+254721000010", photo:null, id_front:null, id_back:null, status:"Verified", submitted:"Mar 10" },
+    { id:2, name:"Peter Omondi",  dob:"1999-03-22", phone:"+254722000002", jersey:10, position:"Fly-half",       kin_name:"Jane Omondi",  kin_phone:"+254722000020", photo:null, id_front:null, id_back:null, status:"Verified", submitted:"Mar 10" },
+    { id:3, name:"Daniel Njoroge",dob:"2001-07-10", phone:"+254723000003", jersey:13, position:"Centre",         kin_name:"Paul Njoroge", kin_phone:"+254723000030", photo:null, id_front:null, id_back:null, status:"Pending",  submitted:"Mar 15" },
+    { id:4, name:"Kevin Mutua",   dob:"2002-04-18", phone:"+254724000004", jersey:14, position:"Winger",         kin_name:"Ann Mutua",    kin_phone:"+254724000040", photo:null, id_front:null, id_back:null, status:"Pending",  submitted:"Mar 17" },
+  ]);
+  const [showAddForm, setShowAddForm]   = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [formError, setFormError]       = useState("");
+  const [formSuccess, setFormSuccess]   = useState(false);
+  const [submitting, setSubmitting]     = useState(false);
+
+  // Form state
+  const emptyForm = { name:"", dob:"", phone:"", jersey:"", position:"", kin_name:"", kin_phone:"", photo:null, photoPreview:null, id_front:null, id_frontPreview:null, id_back:null, id_backPreview:null };
+  const [form, setForm] = useState(emptyForm);
+
+  const POSITIONS = ["Loosehead Prop","Hooker","Tighthead Prop","Lock","Flanker","Number 8","Scrum-half","Fly-half","Centre","Winger","Full-back"];
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleFileUpload = (key, previewKey, file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      set(key, file);
+      set(previewKey, e.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async () => {
+    setFormError("");
+    if (!form.name)         { setFormError("Player full name is required.");       return; }
+    if (!form.dob)          { setFormError("Date of birth is required.");          return; }
+    if (!form.phone)        { setFormError("Phone number is required.");           return; }
+    if (!form.jersey)       { setFormError("Jersey number is required.");          return; }
+    if (!form.position)     { setFormError("Position is required.");               return; }
+    if (!form.kin_name)     { setFormError("Next of kin name is required.");       return; }
+    if (!form.kin_phone)    { setFormError("Next of kin phone is required.");      return; }
+    if (!form.photo)        { setFormError("Player photo is required.");           return; }
+    if (!form.id_front)     { setFormError("Kenyan ID front photo is required.");  return; }
+    if (!form.id_back)      { setFormError("Kenyan ID back photo is required.");   return; }
+
+    // Check duplicate jersey
+    if (players.some(p => Number(p.jersey) === Number(form.jersey))) {
+      setFormError(`Jersey #${form.jersey} is already taken by another player.`);
+      return;
+    }
+
+    setSubmitting(true);
+    await new Promise(r => setTimeout(r, 1400));
+
+    const newPlayer = {
+      id:          players.length + 1,
+      name:        form.name,
+      dob:         form.dob,
+      phone:       form.phone,
+      jersey:      Number(form.jersey),
+      position:    form.position,
+      kin_name:    form.kin_name,
+      kin_phone:   form.kin_phone,
+      photo:       form.photoPreview,
+      id_front:    form.id_frontPreview,
+      id_back:     form.id_backPreview,
+      status:      "Pending",
+      submitted:   new Date().toLocaleDateString("en-GB", { day:"numeric", month:"short" }),
+    };
+
+    setPlayers(prev => [...prev, newPlayer]);
+    setForm(emptyForm);
+    setSubmitting(false);
+    setFormSuccess(true);
+    setTimeout(() => { setFormSuccess(false); setShowAddForm(false); }, 2500);
+  };
+
+  const statusColor = { Verified:C.green, Pending:C.amber, Flagged:C.red };
+  const statusBg    = { Verified:C.greenLight, Pending:C.amberLight, Flagged:C.redLight };
+
   const links = [
     { id:"overview",      label:"Overview",        icon:"📊" },
     { id:"players",       label:"Player Profiles", icon:"🏉" },
@@ -841,62 +919,422 @@ const TeamManagerDashboard = ({ user, onLogout }) => {
     { id:"cards",         label:"Cards & Flags",   icon:"🟥" },
     { id:"notifications", label:"Notifications",   icon:"🔔", badge:"3" },
   ];
+
+  // ── UPLOAD BOX ──────────────────────────────────────────────────────────────
+  const UploadBox = ({ label, preview, onUpload, accept = "image/*", icon }) => (
+    <div>
+      <label className="label">{label}</label>
+      <label style={{ display:"block", cursor:"pointer" }}>
+        <input type="file" accept={accept} style={{ display:"none" }} onChange={e => onUpload(e.target.files[0])}/>
+        <div style={{ border:`2px dashed ${preview?C.green:C.borderDark}`, borderRadius:10, padding:preview?"8px":"20px 12px", textAlign:"center", background:preview?C.greenLight:C.surfaceAlt, transition:"all 0.18s", minHeight:preview?"auto":90, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6 }}
+          onMouseEnter={e => { if(!preview) e.currentTarget.style.borderColor=C.green; }}
+          onMouseLeave={e => { if(!preview) e.currentTarget.style.borderColor=C.borderDark; }}>
+          {preview ? (
+            <div style={{ position:"relative" }}>
+              <img src={preview} alt={label} style={{ width:"100%", maxHeight:120, objectFit:"cover", borderRadius:7, display:"block" }}/>
+              <div style={{ position:"absolute", top:4, right:4, background:C.green, color:"#fff", borderRadius:4, fontSize:10, fontWeight:700, padding:"2px 6px" }}>✓ Uploaded</div>
+            </div>
+          ) : (
+            <>
+              <span style={{ fontSize:26 }}>{icon}</span>
+              <div style={{ fontSize:12, fontWeight:600, color:C.textMid }}>Click to upload</div>
+              <div style={{ fontSize:11, color:C.textSoft }}>JPG, PNG · Max 5MB</div>
+            </>
+          )}
+        </div>
+      </label>
+    </div>
+  );
+
+  // ── PLAYER CARD (detail view) ────────────────────────────────────────────────
+  const PlayerDetail = ({ player, onClose }) => (
+    <>
+      <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.35)", zIndex:200, backdropFilter:"blur(2px)" }}/>
+      <div style={{ position:"fixed", top:0, right:0, bottom:0, width:460, background:C.surface, borderLeft:`1px solid ${C.border}`, zIndex:201, display:"flex", flexDirection:"column", animation:"slideInPanel 0.25s ease", overflowY:"auto" }}>
+        {/* Header */}
+        <div style={{ padding:"18px 22px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+          <div>
+            <div style={{ fontFamily:"'Syne'", fontWeight:800, fontSize:17, color:C.text }}>{player.name}</div>
+            <div style={{ fontSize:12, color:C.textSoft }}>{player.position} · Jersey #{player.jersey}</div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:statusBg[player.status], color:statusColor[player.status] }}>{player.status}</span>
+            <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20, color:C.textSoft, lineHeight:1 }}>×</button>
+          </div>
+        </div>
+
+        <div style={{ padding:"20px 22px", flex:1 }}>
+          {/* Player photo */}
+          <div style={{ display:"flex", gap:14, marginBottom:22 }}>
+            <div style={{ width:80, height:80, borderRadius:12, background:C.greenLight, overflow:"hidden", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              {player.photo
+                ? <img src={player.photo} alt={player.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                : <span style={{ fontFamily:"'Syne'", fontSize:28, fontWeight:800, color:C.green }}>{player.name[0]}</span>
+              }
+            </div>
+            <div>
+              <div style={{ fontFamily:"'Syne'", fontSize:15, fontWeight:800, color:C.text, marginBottom:4 }}>{player.name}</div>
+              <div style={{ fontSize:13, color:C.textMid, marginBottom:3 }}>{player.position}</div>
+              <div style={{ display:"flex", gap:8 }}>
+                <span style={{ padding:"2px 8px", borderRadius:5, background:C.greenLight, color:C.green, fontSize:11, fontWeight:700, fontFamily:"'JetBrains Mono'" }}>#{player.jersey}</span>
+                <span style={{ padding:"2px 8px", borderRadius:5, background:C.surfaceAlt, color:C.textSoft, fontSize:11, fontFamily:"'JetBrains Mono'" }}>Nairobi Rhinos RFC</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Details */}
+          <div style={{ fontSize:11, color:C.textSoft, fontFamily:"'JetBrains Mono'", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>Player details</div>
+          {[
+            { label:"Date of birth", value:player.dob },
+            { label:"Phone",         value:player.phone },
+            { label:"Submitted",     value:player.submitted },
+          ].map((r,i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+              <span style={{ fontSize:12, color:C.textSoft }}>{r.label}</span>
+              <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{r.value}</span>
+            </div>
+          ))}
+
+          <div style={{ fontSize:11, color:C.textSoft, fontFamily:"'JetBrains Mono'", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", margin:"16px 0 8px" }}>Next of kin</div>
+          {[
+            { label:"Name",  value:player.kin_name  },
+            { label:"Phone", value:player.kin_phone },
+          ].map((r,i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+              <span style={{ fontSize:12, color:C.textSoft }}>{r.label}</span>
+              <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{r.value}</span>
+            </div>
+          ))}
+
+          {/* ID Documents */}
+          <div style={{ fontSize:11, color:C.textSoft, fontFamily:"'JetBrains Mono'", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", margin:"16px 0 8px" }}>ID Documents</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            {[
+              { label:"ID Front", img:player.id_front },
+              { label:"ID Back",  img:player.id_back  },
+            ].map((doc,i) => (
+              <div key={i} style={{ borderRadius:8, overflow:"hidden", border:`1px solid ${C.border}` }}>
+                {doc.img
+                  ? <img src={doc.img} alt={doc.label} style={{ width:"100%", height:90, objectFit:"cover", display:"block" }}/>
+                  : <div style={{ height:90, background:C.surfaceAlt, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:4 }}>
+                      <span style={{ fontSize:22 }}>🪪</span>
+                      <span style={{ fontSize:11, color:C.textSoft }}>{doc.label}</span>
+                    </div>
+                }
+                <div style={{ padding:"5px 10px", fontSize:11, fontWeight:600, color:C.textMid, background:C.surfaceAlt }}>{doc.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {player.status === "Pending" && (
+            <div style={{ marginTop:16, padding:"10px 14px", background:C.amberLight, borderRadius:8, border:`1px solid ${C.amber}28`, fontSize:12, color:C.amber }}>
+              ⏳ Awaiting review by Tournament Organizer before appearing in the public pool.
+            </div>
+          )}
+          {player.status === "Verified" && (
+            <div style={{ marginTop:16, padding:"10px 14px", background:C.greenLight, borderRadius:8, border:`1px solid ${C.green}28`, fontSize:12, color:C.green }}>
+              ✅ Player verified and visible in the public pool.
+            </div>
+          )}
+          <div style={{ marginTop:12, padding:"10px 14px", background:C.surfaceAlt, borderRadius:8, border:`1px solid ${C.border}`, fontSize:11, color:C.textSoft }}>
+            🔒 Player profiles cannot be edited after submission. Contact the Tournament Organizer if there is an error.
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  // ── ADD PLAYER FORM ──────────────────────────────────────────────────────────
+  const AddPlayerForm = () => (
+    <div className="fade-up">
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:24 }}>
+        <button className="btn-ghost" onClick={() => { setShowAddForm(false); setFormError(""); setForm(emptyForm); }} style={{ padding:"7px 14px", fontSize:13 }}>← Back</button>
+        <div>
+          <h2 style={{ fontFamily:"'Syne'", fontSize:22, fontWeight:800, color:C.text }}>Add Player Profile</h2>
+          <p style={{ fontSize:13, color:C.textSoft }}>Nairobi Rhinos RFC · Profile cannot be edited after submission</p>
+        </div>
+      </div>
+
+      {formSuccess && (
+        <div style={{ padding:"14px 18px", background:C.greenLight, border:`1px solid ${C.green}28`, borderRadius:10, marginBottom:20, display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ fontSize:22 }}>✅</span>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:C.green }}>Player submitted successfully!</div>
+            <div style={{ fontSize:12, color:C.textSoft }}>Awaiting review by Tournament Organizer.</div>
+          </div>
+        </div>
+      )}
+
+      {formError && (
+        <div style={{ padding:"10px 14px", background:C.redLight, border:`1px solid ${C.red}28`, borderRadius:8, marginBottom:16, fontSize:13, color:C.red }}>
+          ⚠️ {formError}
+        </div>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+        {/* Left column — details */}
+        <div>
+          <div className="card" style={{ padding:"22px 24px", marginBottom:16 }}>
+            <div style={{ fontFamily:"'Syne'", fontWeight:700, fontSize:15, color:C.text, marginBottom:18 }}>Player details</div>
+
+            <Field label="Full Name *">
+              <Input placeholder="e.g. James Omondi Kamau" value={form.name} onChange={e => set("name", e.target.value)}/>
+            </Field>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Field label="Date of Birth *">
+                <Input type="date" value={form.dob} onChange={e => set("dob", e.target.value)}/>
+              </Field>
+              <Field label="Phone Number *">
+                <Input type="tel" placeholder="+254 7XX XXX XXX" value={form.phone} onChange={e => set("phone", e.target.value)}/>
+              </Field>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Field label="Jersey Number *">
+                <Input type="number" min="1" max="99" placeholder="e.g. 10" value={form.jersey} onChange={e => set("jersey", e.target.value)}/>
+              </Field>
+              <Field label="Position *">
+                <SelectField
+                  placeholder="— Select position —"
+                  value={form.position}
+                  onChange={e => set("position", e.target.value)}
+                  options={POSITIONS.map(p => ({ value:p, label:p }))}
+                />
+              </Field>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding:"22px 24px" }}>
+            <div style={{ fontFamily:"'Syne'", fontWeight:700, fontSize:15, color:C.text, marginBottom:18 }}>Next of kin / Emergency contact</div>
+            <Field label="Full Name *">
+              <Input placeholder="e.g. Mary Kamau" value={form.kin_name} onChange={e => set("kin_name", e.target.value)}/>
+            </Field>
+            <Field label="Phone Number *">
+              <Input type="tel" placeholder="+254 7XX XXX XXX" value={form.kin_phone} onChange={e => set("kin_phone", e.target.value)}/>
+            </Field>
+          </div>
+        </div>
+
+        {/* Right column — photos */}
+        <div>
+          <div className="card" style={{ padding:"22px 24px", marginBottom:16 }}>
+            <div style={{ fontFamily:"'Syne'", fontWeight:700, fontSize:15, color:C.text, marginBottom:6 }}>Player photo</div>
+            <div style={{ fontSize:12, color:C.textSoft, marginBottom:16 }}>Clear face photo — will be used for facial recognition verification on matchday.</div>
+            <UploadBox
+              label="Player face photo *"
+              preview={form.photoPreview}
+              icon="📸"
+              onUpload={file => handleFileUpload("photo", "photoPreview", file)}
+            />
+          </div>
+
+          <div className="card" style={{ padding:"22px 24px" }}>
+            <div style={{ fontFamily:"'Syne'", fontWeight:700, fontSize:15, color:C.text, marginBottom:6 }}>Kenyan ID documents</div>
+            <div style={{ fontSize:12, color:C.textSoft, marginBottom:16 }}>Upload both sides of the player's Kenyan National ID. Must be clear and readable.</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <UploadBox
+                label="ID Front *"
+                preview={form.id_frontPreview}
+                icon="🪪"
+                onUpload={file => handleFileUpload("id_front", "id_frontPreview", file)}
+              />
+              <UploadBox
+                label="ID Back *"
+                preview={form.id_backPreview}
+                icon="🪪"
+                onUpload={file => handleFileUpload("id_back", "id_backPreview", file)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Notice */}
+      <div style={{ padding:"12px 16px", background:C.amberLight, borderRadius:8, border:`1px solid ${C.amber}28`, fontSize:12, color:C.amber, margin:"20px 0", lineHeight:1.6 }}>
+        ⚠️ <strong>Important:</strong> Once submitted, this profile cannot be edited. The player will appear as <strong>Pending</strong> until reviewed and approved by the Tournament Organizer. Make sure all details and photos are correct before submitting.
+      </div>
+
+      <div style={{ display:"flex", gap:12 }}>
+        <button className="btn-ghost" onClick={() => { setShowAddForm(false); setFormError(""); setForm(emptyForm); }} style={{ flex:"0 0 130px" }}>
+          Cancel
+        </button>
+        <button className="btn-primary" onClick={handleSubmit} disabled={submitting} style={{ flex:1, fontSize:15 }}>
+          {submitting ? "Submitting..." : "Submit player profile →"}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── PLAYERS LIST PAGE ────────────────────────────────────────────────────────
+  const PlayersPage = () => {
+    const verified = players.filter(p => p.status === "Verified");
+    const pending  = players.filter(p => p.status === "Pending");
+    const flagged  = players.filter(p => p.status === "Flagged");
+
+    return (
+      <div className="fade-up">
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:22 }}>
+          <div>
+            <h1 style={{ fontFamily:"'Syne'", fontSize:24, fontWeight:800, color:C.text }}>Player Profiles</h1>
+            <p style={{ fontSize:13, color:C.textSoft }}>Nairobi Rhinos RFC · {players.length} players submitted</p>
+          </div>
+          <button className="btn-primary" onClick={() => { setShowAddForm(true); setFormError(""); setForm(emptyForm); }} style={{ fontSize:13 }}>
+            + Add Player
+          </button>
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:20 }}>
+          <div className="card" style={{ padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:38, height:38, borderRadius:9, background:C.greenLight, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>✅</div>
+            <div>
+              <div style={{ fontSize:11, color:C.textSoft, fontFamily:"'JetBrains Mono'", textTransform:"uppercase", letterSpacing:"0.05em" }}>Verified</div>
+              <div style={{ fontFamily:"'Syne'", fontWeight:800, fontSize:22, color:C.green }}>{verified.length}</div>
+            </div>
+          </div>
+          <div className="card" style={{ padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:38, height:38, borderRadius:9, background:C.amberLight, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>⏳</div>
+            <div>
+              <div style={{ fontSize:11, color:C.textSoft, fontFamily:"'JetBrains Mono'", textTransform:"uppercase", letterSpacing:"0.05em" }}>Pending</div>
+              <div style={{ fontFamily:"'Syne'", fontWeight:800, fontSize:22, color:C.amber }}>{pending.length}</div>
+            </div>
+          </div>
+          <div className="card" style={{ padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:38, height:38, borderRadius:9, background:C.redLight, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🚩</div>
+            <div>
+              <div style={{ fontSize:11, color:C.textSoft, fontFamily:"'JetBrains Mono'", textTransform:"uppercase", letterSpacing:"0.05em" }}>Flagged</div>
+              <div style={{ fontFamily:"'Syne'", fontWeight:800, fontSize:22, color:C.red }}>{flagged.length}</div>
+            </div>
+          </div>
+        </div>
+
+        {pending.length > 0 && (
+          <div style={{ padding:"10px 14px", background:C.amberLight, borderRadius:8, border:`1px solid ${C.amber}28`, fontSize:12, color:C.amber, marginBottom:16 }}>
+            ⏳ {pending.length} player{pending.length>1?"s are":" is"} awaiting review by the Tournament Organizer.
+          </div>
+        )}
+
+        {/* Players grid */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:12 }}>
+          {players.map((p,i) => (
+            <div key={p.id} className="card" onClick={() => setSelectedPlayer(p)}
+              style={{ padding:"16px 18px", cursor:"pointer", borderLeft:`3px solid ${statusColor[p.status]}`, transition:"all 0.18s" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow="none"}>
+              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+                {/* Avatar */}
+                <div style={{ width:48, height:48, borderRadius:10, background:p.photo?"transparent":C.greenLight, overflow:"hidden", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {p.photo
+                    ? <img src={p.photo} alt={p.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                    : <span style={{ fontFamily:"'Syne'", fontSize:20, fontWeight:800, color:C.green }}>{p.name[0]}</span>
+                  }
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:"'Syne'", fontWeight:700, fontSize:14, color:C.text, marginBottom:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
+                  <div style={{ fontSize:12, color:C.textSoft }}>{p.position}</div>
+                </div>
+                <span style={{ padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:statusBg[p.status], color:statusColor[p.status], flexShrink:0 }}>{p.status}</span>
+              </div>
+              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <span style={{ padding:"2px 8px", borderRadius:5, background:C.greenLight, color:C.green, fontSize:11, fontWeight:700, fontFamily:"'JetBrains Mono'" }}>#{p.jersey}</span>
+                <span style={{ fontSize:11, color:C.textSoft }}>Submitted {p.submitted}</span>
+                <span style={{ marginLeft:"auto", fontSize:12, color:C.green, fontWeight:600 }}>View →</span>
+              </div>
+              {/* ID docs status */}
+              <div style={{ display:"flex", gap:6, marginTop:10 }}>
+                {[
+                  { label:"Photo",    ok:!!p.photo    },
+                  { label:"ID Front", ok:!!p.id_front },
+                  { label:"ID Back",  ok:!!p.id_back  },
+                ].map((doc,j) => (
+                  <div key={j} style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 7px", borderRadius:4, background:doc.ok?C.greenLight:C.redLight, fontSize:10, fontWeight:600, color:doc.ok?C.green:C.red }}>
+                    {doc.ok?"✓":"✗"} {doc.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Add new card */}
+          <div className="card" onClick={() => { setShowAddForm(true); setFormError(""); setForm(emptyForm); }}
+            style={{ padding:"16px 18px", cursor:"pointer", border:`1.5px dashed ${C.borderDark}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:10, minHeight:140, background:"transparent", transition:"all 0.18s" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor=C.green; e.currentTarget.style.background=C.greenLight; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor=C.borderDark; e.currentTarget.style.background="transparent"; }}>
+            <div style={{ width:40, height:40, borderRadius:10, background:C.greenLight, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>+</div>
+            <div style={{ fontSize:13, fontWeight:600, color:C.textSoft }}>Add new player</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={setPage} notifCount={3}>
-      {page==="overview" ? (
+    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={(p) => { setPage(p); setShowAddForm(false); setSelectedPlayer(null); }} notifCount={3}>
+      {/* Player detail panel */}
+      {selectedPlayer && <PlayerDetail player={selectedPlayer} onClose={() => setSelectedPlayer(null)}/>}
+
+      {page === "overview" && (
         <div className="fade-up">
           <div style={{ marginBottom:22 }}>
-            <h1 style={{ fontFamily:"'Syne'",fontSize:26,fontWeight:800,color:C.text }}>Team Dashboard</h1>
-            <p style={{ fontSize:14,color:C.textSoft }}>Nairobi Rhinos RFC · {user.name}</p>
+            <h1 style={{ fontFamily:"'Syne'", fontSize:26, fontWeight:800, color:C.text }}>Team Dashboard</h1>
+            <p style={{ fontSize:14, color:C.textSoft }}>Nairobi Rhinos RFC · {user.name}</p>
           </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:18 }}>
-            <StatCard icon="🏉" label="Registered Players" value="22" color={C.green}/>
-            <StatCard icon="✅" label="Verified Players"   value="19" color={C.blue}/>
-            <StatCard icon="🏥" label="Injured Players"    value="1"  color={C.red}/>
-            <StatCard icon="🟥" label="Suspended Players"  value="1"  color={C.amber}/>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:18 }}>
+            <StatCard icon="🏉" label="Registered Players" value={players.length} color={C.green}/>
+            <StatCard icon="✅" label="Verified Players"   value={players.filter(p=>p.status==="Verified").length}  color={C.blue}/>
+            <StatCard icon="⏳" label="Pending Review"     value={players.filter(p=>p.status==="Pending").length}   color={C.amber}/>
+            <StatCard icon="🚩" label="Flagged Players"    value={players.filter(p=>p.status==="Flagged").length}   color={C.red}/>
           </div>
-          <Alert type="warning">🏥 1 player has been marked injured by the medic — review your squad availability.</Alert>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
+          {players.filter(p=>p.status==="Pending").length > 0 && (
+            <Alert type="warning">⏳ {players.filter(p=>p.status==="Pending").length} player{players.filter(p=>p.status==="Pending").length>1?"s are":" is"} awaiting verification by the Tournament Organizer.</Alert>
+          )}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
             <div className="card" style={{ padding:20 }}>
-              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Recent players added</div>
-              {[
-                { name:"James Kamau",   pos:"Prop",    jersey:1, status:"Verified" },
-                { name:"Peter Omondi",  pos:"Fly-half",jersey:10,status:"Verified" },
-                { name:"Daniel Njoroge",pos:"Centre",  jersey:13,status:"Injured"  },
-                { name:"Kevin Mutua",   pos:"Winger",  jersey:14,status:"Pending"  },
-              ].map((p,i)=>(
-                <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<3?`1px solid ${C.border}`:"none" }}>
-                  <div style={{ width:30,height:30,borderRadius:7,background:C.greenLight,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono'",fontSize:11,fontWeight:700,color:C.green,flexShrink:0 }}>{p.jersey}</div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                <div style={{ fontFamily:"'Syne'", fontWeight:700, fontSize:15 }}>Players</div>
+                <button className="btn-outline-green" onClick={() => setPage("players")} style={{ fontSize:12, padding:"5px 12px" }}>View all →</button>
+              </div>
+              {players.slice(0,4).map((p,i) => (
+                <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:i<3?`1px solid ${C.border}`:"none" }}>
+                  <div style={{ width:30, height:30, borderRadius:7, background:C.greenLight, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'JetBrains Mono'", fontSize:11, fontWeight:700, color:C.green, flexShrink:0 }}>{p.jersey}</div>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{p.name}</div>
-                    <div style={{ fontSize:11,color:C.textSoft }}>{p.pos}</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:C.text }}>{p.name}</div>
+                    <div style={{ fontSize:11, color:C.textSoft }}>{p.position}</div>
                   </div>
-                  <Badge label={p.status} color={p.status==="Verified"?C.green:p.status==="Injured"?C.red:C.amber}/>
+                  <span style={{ padding:"2px 8px", borderRadius:5, fontSize:11, fontWeight:600, background:statusBg[p.status], color:statusColor[p.status] }}>{p.status}</span>
                 </div>
               ))}
             </div>
             <div className="card" style={{ padding:20 }}>
-              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Notifications</div>
+              <div style={{ fontFamily:"'Syne'", fontWeight:700, fontSize:15, marginBottom:14 }}>Notifications</div>
               {[
-                { msg:"Red card — J. Kamau suspended 1 match",   icon:"🟥",time:"2h ago" },
-                { msg:"Daniel Njoroge marked injured by medic",   icon:"🏥",time:"4h ago" },
-                { msg:"Squad verified for Saturday",              icon:"✅",time:"1d ago" },
-              ].map((n,i)=>(
-                <div key={i} style={{ display:"flex",gap:10,padding:"8px 0",borderBottom:i<2?`1px solid ${C.border}`:"none" }}>
-                  <span style={{ fontSize:17,flexShrink:0 }}>{n.icon}</span>
+                { msg:"Red card — J. Kamau suspended 1 match",   icon:"🟥", time:"2h ago" },
+                { msg:"Daniel Njoroge marked injured by medic",   icon:"🏥", time:"4h ago" },
+                { msg:"Squad verified for Saturday",              icon:"✅", time:"1d ago" },
+              ].map((n,i) => (
+                <div key={i} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:i<2?`1px solid ${C.border}`:"none" }}>
+                  <span style={{ fontSize:17, flexShrink:0 }}>{n.icon}</span>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:12,color:C.text }}>{n.msg}</div>
-                    <div style={{ fontSize:11,color:C.textDim }}>{n.time}</div>
+                    <div style={{ fontSize:12, color:C.text }}>{n.msg}</div>
+                    <div style={{ fontSize:11, color:C.textDim }}>{n.time}</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-      ) : <ComingSoon icon={links.find(l=>l.id===page)?.icon} label={links.find(l=>l.id===page)?.label}/>}
+      )}
+
+      {page === "players" && (showAddForm ? <AddPlayerForm/> : <PlayersPage/>)}
+
+      {page !== "overview" && page !== "players" && (
+        <ComingSoon icon={links.find(l=>l.id===page)?.icon} label={links.find(l=>l.id===page)?.label}/>
+      )}
     </DashboardShell>
   );
 };
+
 
 const DataEntryDashboard = ({ user, onLogout }) => {
   const [page, setPage] = useState("overview");
