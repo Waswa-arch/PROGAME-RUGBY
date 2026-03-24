@@ -766,6 +766,205 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
   );
 };
 
+
+// ─── CREATE TOURNAMENT FORM (standalone — avoids focus loss) ─────────────────
+const CreateTournamentForm = ({ onSuccess, onCancel }) => {
+  const FORMAT_OPTIONS = ["Group + Knockout","League","Knockout only","Round Robin"];
+  const emptyT = { name:"",venue:"",start:"",end:"",format:"Group + Knockout",deadline:"",max_teams:"12",max_squad:"23" };
+  const [tForm, setTForm]     = React.useState(emptyT);
+  const [tError, setTError]   = React.useState("");
+  const [tSuccess, setTSuccess] = React.useState(false);
+  const [tLoading, setTLoading] = React.useState(false);
+  const setT = (k,v) => setTForm(f => ({ ...f,[k]:v }));
+
+  const handleCreate = async () => {
+    setTError("");
+    if (!tForm.name)     { setTError("Tournament name is required.");     return; }
+    if (!tForm.venue)    { setTError("Venue is required.");               return; }
+    if (!tForm.start)    { setTError("Start date is required.");          return; }
+    if (!tForm.end)      { setTError("End date is required.");            return; }
+    if (!tForm.deadline) { setTError("Registration deadline is required."); return; }
+    setTLoading(true);
+    await new Promise(r => setTimeout(r,1200));
+    onSuccess({ ...tForm, max_teams:Number(tForm.max_teams), max_squad:Number(tForm.max_squad), status:"Open", teams_registered:0 });
+    setTForm(emptyT);
+    setTLoading(false);
+    setTSuccess(true);
+    setTimeout(() => setTSuccess(false), 2000);
+  };
+
+  return (
+    <div className="fade-up">
+      <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:22 }}>
+        <button className="btn-ghost" onClick={onCancel} style={{ padding:"7px 14px",fontSize:13 }}>← Back</button>
+        <div>
+          <h2 style={{ fontFamily:"'Syne'",fontSize:22,fontWeight:800,color:C.text }}>Create Tournament</h2>
+          <p style={{ fontSize:13,color:C.textSoft }}>Fill in the tournament details below</p>
+        </div>
+      </div>
+      {tSuccess && (
+        <div style={{ padding:"14px 18px",background:C.greenLight,border:`1px solid ${C.green}28`,borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:22 }}>🎉</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:C.green }}>Tournament created!</div><div style={{ fontSize:12,color:C.textSoft }}>Team managers can now register.</div></div>
+        </div>
+      )}
+      {tError && <div style={{ padding:"10px 14px",background:C.redLight,border:`1px solid ${C.red}28`,borderRadius:8,marginBottom:14,fontSize:13,color:C.red }}>⚠️ {tError}</div>}
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:18 }}>
+        <div className="card" style={{ padding:"20px 22px" }}>
+          <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Tournament details</div>
+          <Field label="Tournament Name *"><Input placeholder="e.g. KRU Cup 2025" value={tForm.name} onChange={e=>setT("name",e.target.value)}/></Field>
+          <Field label="Venue *"><Input placeholder="e.g. RFUEA Ground, Nairobi" value={tForm.venue} onChange={e=>setT("venue",e.target.value)}/></Field>
+          <Field label="Match Format *"><SelectField value={tForm.format} onChange={e=>setT("format",e.target.value)} options={FORMAT_OPTIONS.map(f=>({ value:f,label:f }))}/></Field>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+            <Field label="Start Date *"><Input type="date" value={tForm.start} onChange={e=>setT("start",e.target.value)}/></Field>
+            <Field label="End Date *"><Input type="date" value={tForm.end} onChange={e=>setT("end",e.target.value)}/></Field>
+          </div>
+        </div>
+        <div className="card" style={{ padding:"20px 22px" }}>
+          <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Registration settings</div>
+          <Field label="Registration Deadline *"><Input type="date" value={tForm.deadline} onChange={e=>setT("deadline",e.target.value)}/></Field>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+            <Field label="Max Teams"><Input type="number" min="2" max="32" value={tForm.max_teams} onChange={e=>setT("max_teams",e.target.value)}/></Field>
+            <Field label="Max Squad Size"><Input type="number" min="15" max="30" value={tForm.max_squad} onChange={e=>setT("max_squad",e.target.value)}/></Field>
+          </div>
+          <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderRadius:8,border:`1px solid ${C.border}`,fontSize:12,color:C.textMid,lineHeight:1.6,marginTop:8 }}>
+            ℹ️ Once created the tournament will be Open — team managers can register immediately.
+          </div>
+        </div>
+      </div>
+      <div style={{ display:"flex",gap:10,marginTop:18 }}>
+        <button className="btn-ghost" onClick={onCancel} style={{ flex:"0 0 120px" }}>Cancel</button>
+        <button className="btn-primary" onClick={handleCreate} disabled={tLoading} style={{ flex:1,fontSize:15 }}>
+          {tLoading ? "Creating..." : "Create Tournament →"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── ADD PLAYER FORM (standalone — avoids focus loss) ─────────────────────────
+const AddPlayerForm = ({ onSuccess, onCancel, existingJerseys }) => {
+  const POSITIONS = ["Loosehead Prop","Hooker","Tighthead Prop","Lock","Flanker","Number 8","Scrum-half","Fly-half","Centre","Winger","Full-back"];
+  const emptyForm = { name:"",dob:"",phone:"",jersey:"",position:"",kin_name:"",kin_phone:"",photo:null,photoPreview:null,id_front:null,id_frontPreview:null,id_back:null,id_backPreview:null };
+  const [form, setForm]         = React.useState(emptyForm);
+  const [formError, setFormError] = React.useState("");
+  const [formSuccess, setFormSuccess] = React.useState(false);
+  const [submitting, setSubmitting]   = React.useState(false);
+  const setF = (k,v) => setForm(f=>({ ...f,[k]:v }));
+
+  const handleFileUpload = (key, previewKey, file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => { setF(key,file); setF(previewKey,e.target.result); };
+    reader.readAsDataURL(file);
+  };
+
+  const UploadBox = ({ label, preview, onUpload, icon }) => (
+    <div>
+      <label className="label">{label}</label>
+      <label style={{ display:"block",cursor:"pointer" }}>
+        <input type="file" accept="image/*" style={{ display:"none" }} onChange={e=>onUpload(e.target.files[0])}/>
+        <div style={{ border:`2px dashed ${preview?C.green:C.borderDark}`,borderRadius:10,padding:preview?"8px":"18px 12px",textAlign:"center",background:preview?C.greenLight:C.surfaceAlt,transition:"all 0.18s",minHeight:preview?"auto":80,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5 }}>
+          {preview ? (
+            <div style={{ position:"relative" }}>
+              <img src={preview} alt={label} style={{ width:"100%",maxHeight:110,objectFit:"cover",borderRadius:7,display:"block" }}/>
+              <div style={{ position:"absolute",top:4,right:4,background:C.green,color:"#fff",borderRadius:4,fontSize:10,fontWeight:700,padding:"2px 6px" }}>✓</div>
+            </div>
+          ) : (
+            <><span style={{ fontSize:24 }}>{icon}</span><div style={{ fontSize:12,fontWeight:600,color:C.textMid }}>Click to upload</div><div style={{ fontSize:11,color:C.textSoft }}>JPG, PNG · Max 5MB</div></>
+          )}
+        </div>
+      </label>
+    </div>
+  );
+
+  const handleSubmit = async () => {
+    setFormError("");
+    if (!form.name)     { setFormError("Player full name is required."); return; }
+    if (!form.dob)      { setFormError("Date of birth is required."); return; }
+    if (!form.phone)    { setFormError("Phone number is required."); return; }
+    if (!form.jersey)   { setFormError("Jersey number is required."); return; }
+    if (!form.position) { setFormError("Position is required."); return; }
+    if (!form.kin_name) { setFormError("Next of kin name is required."); return; }
+    if (!form.kin_phone){ setFormError("Next of kin phone is required."); return; }
+    if (!form.photo)    { setFormError("Player photo is required."); return; }
+    if (!form.id_front) { setFormError("Kenyan ID front photo is required."); return; }
+    if (!form.id_back)  { setFormError("Kenyan ID back photo is required."); return; }
+    if (existingJerseys.includes(Number(form.jersey))) { setFormError(`Jersey #${form.jersey} is already taken.`); return; }
+    setSubmitting(true);
+    await new Promise(r => setTimeout(r,1200));
+    onSuccess({ name:form.name, dob:form.dob, phone:form.phone, jersey:Number(form.jersey), position:form.position, kin_name:form.kin_name, kin_phone:form.kin_phone, photo:form.photoPreview, id_front:form.id_frontPreview, id_back:form.id_backPreview });
+    setSubmitting(false);
+    setFormSuccess(true);
+    setTimeout(() => setFormSuccess(false), 2200);
+  };
+
+  return (
+    <div className="fade-up">
+      <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:22 }}>
+        <button className="btn-ghost" onClick={onCancel} style={{ padding:"7px 14px",fontSize:13 }}>← Back</button>
+        <div>
+          <h2 style={{ fontFamily:"'Syne'",fontSize:22,fontWeight:800,color:C.text }}>Add Player Profile</h2>
+          <p style={{ fontSize:13,color:C.textSoft }}>Nairobi Rhinos RFC · Cannot be edited after submission</p>
+        </div>
+      </div>
+      {formSuccess && (
+        <div style={{ padding:"14px 18px",background:C.greenLight,border:`1px solid ${C.green}28`,borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:22 }}>✅</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:C.green }}>Player submitted!</div><div style={{ fontSize:12,color:C.textSoft }}>Awaiting review by Tournament Organizer.</div></div>
+        </div>
+      )}
+      {formError && <div style={{ padding:"10px 14px",background:C.redLight,border:`1px solid ${C.red}28`,borderRadius:8,marginBottom:14,fontSize:13,color:C.red }}>⚠️ {formError}</div>}
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:18 }}>
+        <div>
+          <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Player details</div>
+            <Field label="Full Name *"><Input placeholder="e.g. James Omondi Kamau" value={form.name} onChange={e=>setF("name",e.target.value)}/></Field>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+              <Field label="Date of Birth *"><Input type="date" value={form.dob} onChange={e=>setF("dob",e.target.value)}/></Field>
+              <Field label="Phone *"><Input type="tel" placeholder="+254 7XX XXX XXX" value={form.phone} onChange={e=>setF("phone",e.target.value)}/></Field>
+            </div>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+              <Field label="Jersey Number *"><Input type="number" min="1" max="99" placeholder="e.g. 10" value={form.jersey} onChange={e=>setF("jersey",e.target.value)}/></Field>
+              <Field label="Position *"><SelectField placeholder="— Select —" value={form.position} onChange={e=>setF("position",e.target.value)} options={POSITIONS.map(p=>({ value:p,label:p }))}/></Field>
+            </div>
+          </div>
+          <div className="card" style={{ padding:"20px 22px" }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Next of kin</div>
+            <Field label="Full Name *"><Input placeholder="e.g. Mary Kamau" value={form.kin_name} onChange={e=>setF("kin_name",e.target.value)}/></Field>
+            <Field label="Phone *"><Input type="tel" placeholder="+254 7XX XXX XXX" value={form.kin_phone} onChange={e=>setF("kin_phone",e.target.value)}/></Field>
+          </div>
+        </div>
+        <div>
+          <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:6 }}>Player photo</div>
+            <div style={{ fontSize:12,color:C.textSoft,marginBottom:14 }}>Clear face photo for facial recognition.</div>
+            <UploadBox label="Player face photo *" preview={form.photoPreview} icon="📸" onUpload={file=>handleFileUpload("photo","photoPreview",file)}/>
+          </div>
+          <div className="card" style={{ padding:"20px 22px" }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:6 }}>Kenyan ID documents</div>
+            <div style={{ fontSize:12,color:C.textSoft,marginBottom:14 }}>Both sides — must be clear and readable.</div>
+            <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+              <UploadBox label="ID Front *" preview={form.id_frontPreview} icon="🪪" onUpload={file=>handleFileUpload("id_front","id_frontPreview",file)}/>
+              <UploadBox label="ID Back *"  preview={form.id_backPreview}  icon="🪪" onUpload={file=>handleFileUpload("id_back","id_backPreview",file)}/>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style={{ padding:"10px 14px",background:C.amberLight,borderRadius:8,border:`1px solid ${C.amber}28`,fontSize:12,color:C.amber,margin:"16px 0",lineHeight:1.6 }}>
+        ⚠️ Once submitted this profile cannot be edited. Ensure all details and photos are correct.
+      </div>
+      <div style={{ display:"flex",gap:10 }}>
+        <button className="btn-ghost" onClick={onCancel} style={{ flex:"0 0 120px" }}>Cancel</button>
+        <button className="btn-primary" onClick={handleSubmit} disabled={submitting} style={{ flex:1,fontSize:15 }}>
+          {submitting ? "Submitting..." : "Submit player profile →"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+
 const TournamentOrganizerDashboard = ({ user, onLogout }) => {
   const [page, setPage] = useState("overview");
 
@@ -928,68 +1127,6 @@ const TournamentOrganizerDashboard = ({ user, onLogout }) => {
   };
 
   // ── CREATE TOURNAMENT FORM ───────────────────────────────────────────────────
-  const CreateTournamentForm = () => (
-    <div className="fade-up">
-      <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:22 }}>
-        <button className="btn-ghost" onClick={() => { setShowCreateForm(false); setTError(""); }} style={{ padding:"7px 14px",fontSize:13 }}>← Back</button>
-        <div>
-          <h2 style={{ fontFamily:"'Syne'",fontSize:22,fontWeight:800,color:C.text }}>Create Tournament</h2>
-          <p style={{ fontSize:13,color:C.textSoft }}>Fill in the tournament details below</p>
-        </div>
-      </div>
-
-      {tSuccess && (
-        <div style={{ padding:"14px 18px",background:C.greenLight,border:`1px solid ${C.green}28`,borderRadius:10,marginBottom:20,display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:22 }}>🎉</span>
-          <div>
-            <div style={{ fontSize:14,fontWeight:700,color:C.green }}>Tournament created!</div>
-            <div style={{ fontSize:12,color:C.textSoft }}>Team managers can now register their teams.</div>
-          </div>
-        </div>
-      )}
-
-      {tError && (
-        <div style={{ padding:"10px 14px",background:C.redLight,border:`1px solid ${C.red}28`,borderRadius:8,marginBottom:16,fontSize:13,color:C.red }}>⚠️ {tError}</div>
-      )}
-
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:20 }}>
-        <div className="card" style={{ padding:"22px 24px" }}>
-          <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,color:C.text,marginBottom:18 }}>Tournament details</div>
-          <Field label="Tournament Name *"><Input placeholder="e.g. KRU Cup 2025" value={tForm.name} onChange={e=>setT("name",e.target.value)}/></Field>
-          <Field label="Venue *"><Input placeholder="e.g. RFUEA Ground, Nairobi" value={tForm.venue} onChange={e=>setT("venue",e.target.value)}/></Field>
-          <Field label="Match Format *">
-            <SelectField value={tForm.format} onChange={e=>setT("format",e.target.value)} options={FORMAT_OPTIONS.map(f=>({ value:f,label:f }))}/>
-          </Field>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-            <Field label="Start Date *"><Input type="date" value={tForm.start} onChange={e=>setT("start",e.target.value)}/></Field>
-            <Field label="End Date *"><Input type="date" value={tForm.end} onChange={e=>setT("end",e.target.value)}/></Field>
-          </div>
-        </div>
-        <div className="card" style={{ padding:"22px 24px" }}>
-          <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,color:C.text,marginBottom:18 }}>Registration settings</div>
-          <Field label="Registration Deadline *"><Input type="date" value={tForm.deadline} onChange={e=>setT("deadline",e.target.value)}/></Field>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-            <Field label="Max Teams">
-              <Input type="number" min="2" max="32" value={tForm.max_teams} onChange={e=>setT("max_teams",e.target.value)}/>
-            </Field>
-            <Field label="Max Squad Size">
-              <Input type="number" min="15" max="30" value={tForm.max_squad} onChange={e=>setT("max_squad",e.target.value)}/>
-            </Field>
-          </div>
-          <div style={{ padding:"12px 14px",background:C.surfaceAlt,borderRadius:8,border:`1px solid ${C.border}`,fontSize:12,color:C.textMid,lineHeight:1.6,marginTop:8 }}>
-            ℹ️ Once created, the tournament will be <strong>Open</strong> — team managers can immediately register their teams. You can close registration at any time.
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display:"flex",gap:12,marginTop:20 }}>
-        <button className="btn-ghost" onClick={() => { setShowCreateForm(false); setTError(""); }} style={{ flex:"0 0 130px" }}>Cancel</button>
-        <button className="btn-primary" onClick={handleCreateTournament} disabled={tLoading} style={{ flex:1,fontSize:15 }}>
-          {tLoading ? "Creating..." : "Create Tournament →"}
-        </button>
-      </div>
-    </div>
-  );
 
   // ── TOURNAMENTS LIST ─────────────────────────────────────────────────────────
   const TournamentsPage = () => (
@@ -1207,7 +1344,12 @@ const TournamentOrganizerDashboard = ({ user, onLogout }) => {
           </div>
         </div>
       )}
-      {page==="tournaments" && (showCreateForm ? <CreateTournamentForm/> : <TournamentsPage/>)}
+      {page==="tournaments" && (showCreateForm 
+        ? <CreateTournamentForm 
+            onSuccess={(t) => { setTournaments(prev=>[...prev,{id:`t${prev.length+1}`,...t}]); setShowCreateForm(false); }} 
+            onCancel={() => setShowCreateForm(false)}
+          /> 
+        : <TournamentsPage/>)}
       {page==="squads" && <SquadVerificationPage/>}
       {page!=="overview" && page!=="tournaments" && page!=="squads" && (
         <ComingSoon icon={links.find(l=>l.id===page)?.icon} label={links.find(l=>l.id===page)?.label}/>
@@ -1408,69 +1550,6 @@ const TeamManagerDashboard = ({ user, onLogout }) => {
   );
 
   // ── ADD PLAYER FORM ──────────────────────────────────────────────────────────
-  const AddPlayerForm = () => (
-    <div className="fade-up">
-      <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:22 }}>
-        <button className="btn-ghost" onClick={()=>{ setShowAddForm(false); setFormError(""); setForm(emptyForm); }} style={{ padding:"7px 14px",fontSize:13 }}>← Back</button>
-        <div>
-          <h2 style={{ fontFamily:"'Syne'",fontSize:22,fontWeight:800,color:C.text }}>Add Player Profile</h2>
-          <p style={{ fontSize:13,color:C.textSoft }}>Nairobi Rhinos RFC · Cannot be edited after submission</p>
-        </div>
-      </div>
-      {formSuccess && (
-        <div style={{ padding:"14px 18px",background:C.greenLight,border:`1px solid ${C.green}28`,borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:22 }}>✅</span>
-          <div><div style={{ fontSize:14,fontWeight:700,color:C.green }}>Player submitted!</div><div style={{ fontSize:12,color:C.textSoft }}>Awaiting review by Tournament Organizer.</div></div>
-        </div>
-      )}
-      {formError && <div style={{ padding:"10px 14px",background:C.redLight,border:`1px solid ${C.red}28`,borderRadius:8,marginBottom:14,fontSize:13,color:C.red }}>⚠️ {formError}</div>}
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:18 }}>
-        <div>
-          <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Player details</div>
-            <Field label="Full Name *"><Input placeholder="e.g. James Omondi Kamau" value={form.name} onChange={e=>setF("name",e.target.value)}/></Field>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-              <Field label="Date of Birth *"><Input type="date" value={form.dob} onChange={e=>setF("dob",e.target.value)}/></Field>
-              <Field label="Phone *"><Input type="tel" placeholder="+254 7XX XXX XXX" value={form.phone} onChange={e=>setF("phone",e.target.value)}/></Field>
-            </div>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-              <Field label="Jersey Number *"><Input type="number" min="1" max="99" placeholder="e.g. 10" value={form.jersey} onChange={e=>setF("jersey",e.target.value)}/></Field>
-              <Field label="Position *"><SelectField placeholder="— Select —" value={form.position} onChange={e=>setF("position",e.target.value)} options={POSITIONS.map(p=>({ value:p,label:p }))}/></Field>
-            </div>
-          </div>
-          <div className="card" style={{ padding:"20px 22px" }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Next of kin</div>
-            <Field label="Full Name *"><Input placeholder="e.g. Mary Kamau" value={form.kin_name} onChange={e=>setF("kin_name",e.target.value)}/></Field>
-            <Field label="Phone *"><Input type="tel" placeholder="+254 7XX XXX XXX" value={form.kin_phone} onChange={e=>setF("kin_phone",e.target.value)}/></Field>
-          </div>
-        </div>
-        <div>
-          <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:6 }}>Player photo</div>
-            <div style={{ fontSize:12,color:C.textSoft,marginBottom:14 }}>Clear face photo for facial recognition on matchday.</div>
-            <UploadBox label="Player face photo *" preview={form.photoPreview} icon="📸" onUpload={file=>handleFileUpload("photo","photoPreview",file)}/>
-          </div>
-          <div className="card" style={{ padding:"20px 22px" }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:6 }}>Kenyan ID documents</div>
-            <div style={{ fontSize:12,color:C.textSoft,marginBottom:14 }}>Both sides — must be clear and readable.</div>
-            <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-              <UploadBox label="ID Front *" preview={form.id_frontPreview} icon="🪪" onUpload={file=>handleFileUpload("id_front","id_frontPreview",file)}/>
-              <UploadBox label="ID Back *"  preview={form.id_backPreview}  icon="🪪" onUpload={file=>handleFileUpload("id_back","id_backPreview",file)}/>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div style={{ padding:"10px 14px",background:C.amberLight,borderRadius:8,border:`1px solid ${C.amber}28`,fontSize:12,color:C.amber,margin:"16px 0",lineHeight:1.6 }}>
-        ⚠️ Once submitted this profile cannot be edited. Ensure all details and photos are correct.
-      </div>
-      <div style={{ display:"flex",gap:10 }}>
-        <button className="btn-ghost" onClick={()=>{ setShowAddForm(false); setFormError(""); setForm(emptyForm); }} style={{ flex:"0 0 120px" }}>Cancel</button>
-        <button className="btn-primary" onClick={handleSubmitPlayer} disabled={submitting} style={{ flex:1,fontSize:15 }}>
-          {submitting ? "Submitting..." : "Submit player profile →"}
-        </button>
-      </div>
-    </div>
-  );
 
   // ── PLAYERS PAGE ─────────────────────────────────────────────────────────────
   const PlayersPage = () => (
@@ -1764,7 +1843,13 @@ const TeamManagerDashboard = ({ user, onLogout }) => {
           </div>
         </div>
       )}
-      {page==="players"     && (showAddForm ? <AddPlayerForm/> : <PlayersPage/>)}
+      {page==="players" && (showAddForm 
+        ? <AddPlayerForm
+            existingJerseys={players.map(p=>p.jersey)}
+            onSuccess={(p) => { setPlayers(prev=>[...prev,{ id:prev.length+1,...p,status:"Pending",submitted:new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"}) }]); setShowAddForm(false); }}
+            onCancel={() => setShowAddForm(false)}
+          />
+        : <PlayersPage/>)}
       {page==="squad"       && <SquadBuilderPage/>}
       {page==="tournaments" && <TournamentsPage/>}
       {page!=="overview" && page!=="players" && page!=="squad" && page!=="tournaments" && (
