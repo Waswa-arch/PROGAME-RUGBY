@@ -532,7 +532,7 @@ const LoginPage = ({ onBack, onLogin }) => {
 };
 
 // ─── PUBLIC LIVE PAGE ─────────────────────────────────────────────────────────
-const PublicPage = ({ onBack }) => {
+const PublicPage = ({ onBack, liveMatches: externalLive }) => {
   const [tab, setTab] = useState("live");
 
   const liveMatch = { home:"Nairobi Rhinos RFC", away:"Kisumu Tigers RFC", hs:21, as:14, half:"2nd Half", minute:58 };
@@ -1860,59 +1860,599 @@ const TeamManagerDashboard = ({ user, onLogout }) => {
 };
 
 
-const DataEntryDashboard = ({ user, onLogout }) => {
-  const [page, setPage] = useState("overview");
-  const links = [
-    { id:"overview", label:"Overview",     icon:"📊" },
-    { id:"clock",    label:"Match Clock",  icon:"⏱️" },
-    { id:"scores",   label:"Live Scores",  icon:"📺" },
-    { id:"schedule", label:"Schedule",     icon:"📅" },
-    { id:"events",   label:"Match Events", icon:"🏉" },
+const DataEntryDashboard = ({ user, onLogout, liveMatches, setLiveMatches }) => {
+  const [page, setPage]               = useState("overview");
+  const [activeMatchId, setActiveMatchId] = useState(null);
+
+  // ── MOCK SCHEDULED MATCHES ─────────────────────────────────────────────────
+  const [matches, setMatches] = useState([
+    { id:"m1", home:"Nairobi Rhinos RFC",  away:"Kisumu Tigers RFC",   venue:"RFUEA Ground",   date:"Sat 14:00", tournament:"KRU Cup 2025", half_duration:40, status:"Live",      home_score:21, away_score:14, clock:58, phase:"2nd Half",
+      home_squad:[
+        { jersey:1,  name:"James Kamau"   }, { jersey:2,  name:"Ali Hassan"     }, { jersey:3,  name:"Brian Waweru"  },
+        { jersey:4,  name:"Moses Otieno"  }, { jersey:5,  name:"Peter Omondi"   }, { jersey:8,  name:"Daniel Njoroge"},
+        { jersey:9,  name:"Kevin Mutua"   }, { jersey:10, name:"Grace Wanjiku"  }, { jersey:12, name:"David Njoroge" },
+        { jersey:13, name:"Eric Ochieng"  }, { jersey:11, name:"Samuel Mutua"   }, { jersey:15, name:"Tom Baraka"    },
+      ],
+      away_squad:[
+        { jersey:1,  name:"Wycliffe Oduya"}, { jersey:2,  name:"Hassan Abdi"    }, { jersey:3,  name:"John Mwenda"   },
+        { jersey:4,  name:"Paul Kamau"    }, { jersey:5,  name:"Felix Omondi"   }, { jersey:8,  name:"Mark Waweru"   },
+        { jersey:9,  name:"Steven Njeru"  }, { jersey:10, name:"Collins Otieno" }, { jersey:12, name:"Dennis Mutua"  },
+        { jersey:13, name:"Victor Oduya"  }, { jersey:11, name:"George Kamau"   }, { jersey:15, name:"Richard Mwangi"},
+      ],
+      events:[
+        { id:"e1", min:3,  type:"Try",        team:"home", player:"James Kamau",    jersey:1,  points:5, score:"5–0"  },
+        { id:"e2", min:5,  type:"Conversion", team:"home", player:"Peter Omondi",   jersey:5,  points:2, score:"7–0"  },
+        { id:"e3", min:18, type:"Penalty",    team:"away", player:"Collins Otieno", jersey:10, points:3, score:"7–3"  },
+        { id:"e4", min:31, type:"Try",        team:"away", player:"Wycliffe Oduya", jersey:1,  points:5, score:"7–8"  },
+        { id:"e5", min:33, type:"Conversion", team:"away", player:"Collins Otieno", jersey:10, points:2, score:"7–10" },
+        { id:"e6", min:40, type:"Half Time",  team:"",     player:"",               jersey:"", points:0, score:"7–10" },
+        { id:"e7", min:44, type:"Try",        team:"home", player:"Daniel Njoroge", jersey:8,  points:5, score:"12–10"},
+        { id:"e8", min:46, type:"Conversion", team:"home", player:"Peter Omondi",   jersey:5,  points:2, score:"14–10"},
+        { id:"e9", min:52, type:"Try",        team:"home", player:"James Kamau",    jersey:1,  points:5, score:"19–10"},
+        { id:"e10",min:54, type:"Conversion", team:"home", player:"Peter Omondi",   jersey:5,  points:2, score:"21–10"},
+        { id:"e11",min:57, type:"Penalty",    team:"away", player:"Collins Otieno", jersey:10, points:3, score:"21–13"},
+        { id:"e12",min:58, type:"Penalty",    team:"away", player:"Collins Otieno", jersey:10, points:3, score:"21–14"},
+      ],
+    },
+    { id:"m2", home:"Mombasa Lions RFC",  away:"Thika Panthers RFC", venue:"Mombasa Arena",  date:"Sat 16:30", tournament:"KRU Cup 2025", half_duration:40, status:"Scheduled",  home_score:0,  away_score:0,  clock:0,  phase:"Not started", home_squad:[], away_squad:[], events:[] },
+    { id:"m3", home:"Nakuru Eagles RFC",  away:"Eldoret Bulls RFC",  venue:"Nakuru Stadium", date:"Sun 15:00", tournament:"KRU Cup 2025", half_duration:40, status:"Scheduled",  home_score:0,  away_score:0,  clock:0,  phase:"Not started", home_squad:[], away_squad:[], events:[] },
+  ]);
+
+  // ── CLOCK STATE ────────────────────────────────────────────────────────────
+  const [running, setRunning]   = useState(false);
+  const clockRef                = useRef(null);
+
+  // ── SCORING MODAL STATE ────────────────────────────────────────────────────
+  const [showScoreModal, setShowScoreModal] = useState(false);
+  const [scoreForm, setScoreForm] = useState({ type:"Try", team:"home", search:"", selectedPlayer:null });
+  const [editingEvent, setEditingEvent]     = useState(null);
+  const [showEditModal, setShowEditModal]   = useState(false);
+
+  const SCORE_TYPES = [
+    { label:"Try",         points:5,  icon:"🏉" },
+    { label:"Conversion",  points:2,  icon:"🎯" },
+    { label:"Penalty",     points:3,  icon:"⚽" },
+    { label:"Drop goal",   points:3,  icon:"🦵" },
+    { label:"Penalty try", points:7,  icon:"⭐" },
   ];
+
+  const PHASE_SEQUENCE = ["Not started","1st Half","Half Time","2nd Half","Full Time","Extra Time"];
+
+  const getMatch = (id) => matches.find(m => m.id === id);
+  const activeMatch = activeMatchId ? getMatch(activeMatchId) : matches.find(m => m.status === "Live");
+
+  // ── CLOCK TICK ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (running && activeMatch) {
+      clockRef.current = setInterval(() => {
+        setMatches(prev => prev.map(m =>
+          m.id === activeMatch.id ? { ...m, clock: m.clock + 1 } : m
+        ));
+      }, 1000); // 1s = 1min in demo mode
+    } else {
+      clearInterval(clockRef.current);
+    }
+    return () => clearInterval(clockRef.current);
+  }, [running, activeMatch?.id]);
+
+  // ── SYNC TO LIVE STATE (shared with public page) ───────────────────────────
+  useEffect(() => {
+    if (setLiveMatches) {
+      setLiveMatches(matches.filter(m => m.status === "Live" || m.status === "Half Time"));
+    }
+  }, [matches]);
+
+  // ── CLOCK CONTROL ─────────────────────────────────────────────────────────
+  const handlePhaseChange = (matchId, newPhase) => {
+    setRunning(false);
+    setMatches(prev => prev.map(m => {
+      if (m.id !== matchId) return m;
+      const updates = { phase: newPhase };
+      if (newPhase === "1st Half") {
+        updates.status = "Live"; updates.clock = 0; setRunning(true);
+      } else if (newPhase === "Half Time") {
+        updates.status = "Half Time"; setRunning(false);
+        const hs = m.home_score; const as = m.away_score;
+        updates.events = [...m.events, { id:`e${Date.now()}`, min:m.clock, type:"Half Time", team:"", player:"", jersey:"", points:0, score:`${hs}–${as}` }];
+      } else if (newPhase === "2nd Half") {
+        updates.status = "Live"; setRunning(true);
+      } else if (newPhase === "Full Time") {
+        updates.status = "Completed"; setRunning(false);
+        const hs = m.home_score; const as = m.away_score;
+        updates.events = [...m.events, { id:`e${Date.now()}`, min:m.clock, type:"Full Time", team:"", player:"", jersey:"", points:0, score:`${hs}–${as}` }];
+      } else if (newPhase === "Extra Time") {
+        updates.status = "Live"; setRunning(true);
+      }
+      return { ...m, ...updates };
+    }));
+  };
+
+  // ── RECORD EVENT ──────────────────────────────────────────────────────────
+  const handleRecordEvent = (matchId) => {
+    if (!scoreForm.selectedPlayer && scoreForm.type !== "Penalty try") {
+      if (!scoreForm.search) return;
+    }
+    const match = getMatch(matchId);
+    if (!match) return;
+
+    const stInfo = SCORE_TYPES.find(s => s.label === scoreForm.type);
+    const pts = stInfo?.points || 0;
+
+    let hs = match.home_score;
+    let as = match.away_score;
+    if (scoreForm.team === "home") hs += pts;
+    else as += pts;
+
+    const newEvent = {
+      id:       `e${Date.now()}`,
+      min:      match.clock,
+      type:     scoreForm.type,
+      team:     scoreForm.team,
+      player:   scoreForm.selectedPlayer?.name || scoreForm.search,
+      jersey:   scoreForm.selectedPlayer?.jersey || "",
+      points:   pts,
+      score:    `${hs}–${as}`,
+    };
+
+    setMatches(prev => prev.map(m =>
+      m.id === matchId ? { ...m, home_score: hs, away_score: as, events: [...m.events, newEvent] } : m
+    ));
+    setShowScoreModal(false);
+    setScoreForm({ type:"Try", team:"home", search:"", selectedPlayer:null });
+  };
+
+  // ── DELETE EVENT ──────────────────────────────────────────────────────────
+  const handleDeleteEvent = (matchId, eventId) => {
+    setMatches(prev => prev.map(m => {
+      if (m.id !== matchId) return m;
+      const evt = m.events.find(e => e.id === eventId);
+      if (!evt || evt.points === 0) return { ...m, events: m.events.filter(e => e.id !== eventId) };
+      const hs = m.home_score - (evt.team === "home" ? evt.points : 0);
+      const as = m.away_score - (evt.team === "away" ? evt.points : 0);
+      return { ...m, home_score: Math.max(0,hs), away_score: Math.max(0,as), events: m.events.filter(e => e.id !== eventId) };
+    }));
+  };
+
+  // ── PLAYER SEARCH ─────────────────────────────────────────────────────────
+  const getFilteredPlayers = (match, team, search) => {
+    const squad = team === "home" ? match.home_squad : match.away_squad;
+    if (!search) return squad;
+    const q = search.toLowerCase();
+    return squad.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      String(p.jersey).includes(q)
+    );
+  };
+
+  const typeColor = { Try:C.green, Conversion:C.blue, Penalty:C.gold, "Drop goal":C.teal, "Penalty try":C.purple, "Half Time":C.textSoft, "Full Time":C.textSoft };
+  const typeBg    = { Try:C.greenLight, Conversion:C.blueLight, Penalty:C.goldLight, "Drop goal":C.tealLight, "Penalty try":C.purpleLight, "Half Time":C.surfaceAlt, "Full Time":C.surfaceAlt };
+
+  // ── SCORE MODAL ────────────────────────────────────────────────────────────
+  const ScoreModal = ({ match, onClose }) => {
+    const [localForm, setLocalForm] = useState({ type:"Try", team:"home", search:"", selectedPlayer:null });
+    const filtered = getFilteredPlayers(match, localForm.team, localForm.search);
+    const stInfo   = SCORE_TYPES.find(s => s.label === localForm.type);
+
+    return (
+      <>
+        <div onClick={onClose} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:200,backdropFilter:"blur(2px)" }}/>
+        <div style={{ position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:520,background:"#fff",borderRadius:16,border:`1px solid ${C.border}`,zIndex:201,boxShadow:"0 20px 60px rgba(0,0,0,0.15)",overflow:"hidden" }}>
+          {/* Header */}
+          <div style={{ padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.surfaceAlt }}>
+            <div>
+              <div style={{ fontFamily:"'Syne'",fontWeight:800,fontSize:16,color:C.text }}>Record scoring event</div>
+              <div style={{ fontSize:12,color:C.textSoft }}>{match.home} vs {match.away} · {match.clock}'</div>
+            </div>
+            <button onClick={onClose} style={{ background:"none",border:"none",cursor:"pointer",fontSize:22,color:C.textSoft }}>×</button>
+          </div>
+          <div style={{ padding:"18px 20px" }}>
+            {/* Event type */}
+            <div style={{ marginBottom:16 }}>
+              <label className="label">Event type</label>
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8 }}>
+                {SCORE_TYPES.map(s => (
+                  <button key={s.label} onClick={() => setLocalForm(f=>({...f,type:s.label}))}
+                    style={{ padding:"10px 6px",borderRadius:8,border:`1.5px solid ${localForm.type===s.label?typeColor[s.label]:C.border}`,background:localForm.type===s.label?typeBg[s.label]:"transparent",cursor:"pointer",textAlign:"center",transition:"all 0.15s" }}>
+                    <div style={{ fontSize:18,marginBottom:3 }}>{s.icon}</div>
+                    <div style={{ fontSize:11,fontWeight:600,color:localForm.type===s.label?typeColor[s.label]:C.textMid }}>{s.label}</div>
+                    <div style={{ fontSize:10,color:C.textSoft }}>+{s.points} pts</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Team */}
+            <div style={{ marginBottom:16 }}>
+              <label className="label">Team scoring</label>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+                {["home","away"].map(t => (
+                  <button key={t} onClick={() => setLocalForm(f=>({...f,team:t,search:"",selectedPlayer:null}))}
+                    style={{ padding:"10px",borderRadius:8,border:`1.5px solid ${localForm.team===t?C.green:C.border}`,background:localForm.team===t?C.greenLight:"transparent",cursor:"pointer",fontWeight:600,fontSize:13,color:localForm.team===t?C.green:C.textMid,transition:"all 0.15s" }}>
+                    {t==="home"?match.home:match.away}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Player search */}
+            <div style={{ marginBottom:18 }}>
+              <label className="label">Player (jersey # or name)</label>
+              <input className="input-field" placeholder="e.g. 10 or James Kamau"
+                value={localForm.search}
+                onChange={e => setLocalForm(f=>({...f,search:e.target.value,selectedPlayer:null}))}
+                autoFocus
+              />
+              {localForm.search && (
+                <div style={{ marginTop:6,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",maxHeight:160,overflowY:"auto" }}>
+                  {filtered.length === 0 ? (
+                    <div style={{ padding:"10px 14px",fontSize:12,color:C.textSoft }}>No players found. Will record as typed.</div>
+                  ) : filtered.map((p,i) => (
+                    <div key={i} onClick={() => setLocalForm(f=>({...f,selectedPlayer:p,search:`#${p.jersey} ${p.name}`}))}
+                      style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 14px",cursor:"pointer",background:localForm.selectedPlayer?.jersey===p.jersey?C.greenLight:"transparent",borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none" }}
+                      onMouseEnter={e=>e.currentTarget.style.background=C.greenLight}
+                      onMouseLeave={e=>e.currentTarget.style.background=localForm.selectedPlayer?.jersey===p.jersey?C.greenLight:"transparent"}>
+                      <div style={{ width:28,height:28,borderRadius:6,background:C.greenLight,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono'",fontSize:11,fontWeight:700,color:C.green }}>{p.jersey}</div>
+                      <span style={{ fontSize:13,fontWeight:600,color:C.text }}>{p.name}</span>
+                      {localForm.selectedPlayer?.jersey===p.jersey && <span style={{ marginLeft:"auto",fontSize:12,color:C.green }}>✓</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Preview */}
+            {(localForm.selectedPlayer || localForm.search) && (
+              <div style={{ padding:"10px 14px",background:typeBg[localForm.type]||C.greenLight,borderRadius:8,border:`1px solid ${typeColor[localForm.type]}28`,marginBottom:16,fontSize:13 }}>
+                <span style={{ fontSize:16,marginRight:8 }}>{SCORE_TYPES.find(s=>s.label===localForm.type)?.icon}</span>
+                <strong style={{ color:typeColor[localForm.type] }}>{localForm.type}</strong>
+                {" · "}
+                {localForm.selectedPlayer ? `#${localForm.selectedPlayer.jersey} ${localForm.selectedPlayer.name}` : localForm.search}
+                {" · "}
+                {localForm.team==="home"?match.home:match.away}
+                {" · "}
+                <strong>+{SCORE_TYPES.find(s=>s.label===localForm.type)?.points} pts</strong>
+              </div>
+            )}
+
+            <div style={{ display:"flex",gap:10 }}>
+              <button className="btn-ghost" onClick={onClose} style={{ flex:"0 0 100px" }}>Cancel</button>
+              <button className="btn-primary" onClick={() => { setScoreForm(localForm); handleRecordEvent(match.id); onClose(); }}
+                disabled={!localForm.search && !localForm.selectedPlayer}
+                style={{ flex:1,opacity:(!localForm.search&&!localForm.selectedPlayer)?0.5:1 }}>
+                Record event →
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // ── MATCH CLOCK PAGE ──────────────────────────────────────────────────────
+  const MatchClockPage = ({ match }) => {
+    if (!match) return (
+      <div style={{ textAlign:"center",padding:"60px 20px" }}>
+        <div style={{ fontSize:48,marginBottom:16 }}>⏱️</div>
+        <div style={{ fontFamily:"'Syne'",fontSize:20,fontWeight:700,color:C.text,marginBottom:8 }}>No active match</div>
+        <div style={{ fontSize:14,color:C.textSoft }}>Select a match from the schedule to manage it.</div>
+      </div>
+    );
+
+    const phaseIdx     = PHASE_SEQUENCE.indexOf(match.phase);
+    const nextPhase    = PHASE_SEQUENCE[phaseIdx + 1];
+    const isLive       = match.status === "Live";
+    const isHalfTime   = match.phase === "Half Time";
+    const isCompleted  = match.status === "Completed";
+    const formatClock  = (s) => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+    const mins         = Math.floor(match.clock / 60);
+
+    const phaseLabel = {
+      "Not started":"Match not started",
+      "1st Half":   "1st Half",
+      "Half Time":  "Half Time",
+      "2nd Half":   "2nd Half",
+      "Full Time":  "Full Time",
+      "Extra Time": "Extra Time",
+    };
+
+    return (
+      <div className="fade-up">
+        {showScoreModal && <ScoreModal match={match} onClose={()=>setShowScoreModal(false)}/>}
+
+        {/* Match header */}
+        <div className="card" style={{ padding:"24px 28px",marginBottom:16,borderLeft:`4px solid ${isLive?C.red:isCompleted?C.green:C.borderDark}` }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18 }}>
+            <div>
+              <div style={{ fontSize:12,color:C.textSoft,fontFamily:"'JetBrains Mono'",marginBottom:4 }}>{match.tournament} · {match.venue}</div>
+              <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                {isLive && (
+                  <div style={{ display:"flex",alignItems:"center",gap:5,padding:"3px 10px",background:C.redLight,borderRadius:5 }}>
+                    <span style={{ width:7,height:7,borderRadius:"50%",background:C.red,display:"inline-block",animation:"pulse 1.5s infinite" }}/>
+                    <span style={{ fontSize:11,fontWeight:700,color:C.red,fontFamily:"'JetBrains Mono'" }}>LIVE</span>
+                  </div>
+                )}
+                <span style={{ fontSize:13,fontWeight:600,color:isLive?C.red:C.textSoft }}>{phaseLabel[match.phase]}</span>
+              </div>
+            </div>
+            {!isCompleted && (
+              <button className="btn-primary" onClick={() => setShowScoreModal(true)}
+                style={{ background:C.green,fontSize:13,display:"flex",alignItems:"center",gap:8 }}>
+                🏉 Record event
+              </button>
+            )}
+          </div>
+
+          {/* Score display */}
+          <div style={{ display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:20,alignItems:"center",marginBottom:20 }}>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:"'Syne'",fontSize:18,fontWeight:800,color:C.text,marginBottom:4 }}>{match.home}</div>
+              <div style={{ fontSize:12,color:C.textSoft }}>Home</div>
+            </div>
+            <div style={{ textAlign:"center",padding:"16px 28px",background:C.bg,borderRadius:14 }}>
+              <div style={{ fontFamily:"'Syne'",fontSize:52,fontWeight:800,color:isLive?C.red:C.text,letterSpacing:"-0.02em",lineHeight:1 }}>
+                {match.home_score} <span style={{ color:C.borderDark }}>—</span> {match.away_score}
+              </div>
+              {/* Clock */}
+              <div style={{ fontFamily:"'JetBrains Mono'",fontSize:20,fontWeight:700,color:isLive?C.red:C.textSoft,marginTop:8 }}>
+                {match.status==="Not started"||match.status==="Scheduled" ? "00:00" : `${mins}'`}
+              </div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:"'Syne'",fontSize:18,fontWeight:800,color:C.text,marginBottom:4 }}>{match.away}</div>
+              <div style={{ fontSize:12,color:C.textSoft }}>Away</div>
+            </div>
+          </div>
+
+          {/* Clock controls */}
+          {!isCompleted && (
+            <div style={{ display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap" }}>
+              {match.phase === "Not started" && (
+                <button onClick={() => handlePhaseChange(match.id,"1st Half")}
+                  style={{ padding:"12px 24px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontFamily:"'DM Sans'",fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",gap:8 }}>
+                  ▶ Start 1st Half
+                </button>
+              )}
+              {match.phase === "1st Half" && (
+                <>
+                  <button onClick={() => setRunning(r=>!r)}
+                    style={{ padding:"10px 20px",borderRadius:8,border:`1px solid ${running?C.amber:C.green}`,background:running?C.amberLight:C.greenLight,color:running?C.amber:C.green,fontFamily:"'DM Sans'",fontWeight:700,fontSize:13,cursor:"pointer" }}>
+                    {running ? "⏸ Pause clock" : "▶ Resume clock"}
+                  </button>
+                  <button onClick={() => handlePhaseChange(match.id,"Half Time")}
+                    style={{ padding:"10px 20px",borderRadius:8,border:`1px solid ${C.red}`,background:C.redLight,color:C.red,fontFamily:"'DM Sans'",fontWeight:700,fontSize:13,cursor:"pointer" }}>
+                    ⏹ Half Time
+                  </button>
+                </>
+              )}
+              {match.phase === "Half Time" && (
+                <button onClick={() => handlePhaseChange(match.id,"2nd Half")}
+                  style={{ padding:"12px 24px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontFamily:"'DM Sans'",fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",gap:8 }}>
+                  ▶ Start 2nd Half
+                </button>
+              )}
+              {match.phase === "2nd Half" && (
+                <>
+                  <button onClick={() => setRunning(r=>!r)}
+                    style={{ padding:"10px 20px",borderRadius:8,border:`1px solid ${running?C.amber:C.green}`,background:running?C.amberLight:C.greenLight,color:running?C.amber:C.green,fontFamily:"'DM Sans'",fontWeight:700,fontSize:13,cursor:"pointer" }}>
+                    {running ? "⏸ Pause clock" : "▶ Resume clock"}
+                  </button>
+                  <button onClick={() => handlePhaseChange(match.id,"Full Time")}
+                    style={{ padding:"10px 20px",borderRadius:8,border:`1px solid ${C.red}`,background:C.redLight,color:C.red,fontFamily:"'DM Sans'",fontWeight:700,fontSize:13,cursor:"pointer" }}>
+                    🏁 Full Time
+                  </button>
+                  <button onClick={() => handlePhaseChange(match.id,"Extra Time")}
+                    style={{ padding:"10px 20px",borderRadius:8,border:`1px solid ${C.purple}`,background:C.purpleLight,color:C.purple,fontFamily:"'DM Sans'",fontWeight:700,fontSize:13,cursor:"pointer" }}>
+                    ⚡ Extra Time
+                  </button>
+                </>
+              )}
+              {match.phase === "Extra Time" && (
+                <>
+                  <button onClick={() => setRunning(r=>!r)}
+                    style={{ padding:"10px 20px",borderRadius:8,border:`1px solid ${running?C.amber:C.green}`,background:running?C.amberLight:C.greenLight,color:running?C.amber:C.green,fontFamily:"'DM Sans'",fontWeight:700,fontSize:13,cursor:"pointer" }}>
+                    {running ? "⏸ Pause" : "▶ Resume"}
+                  </button>
+                  <button onClick={() => handlePhaseChange(match.id,"Full Time")}
+                    style={{ padding:"10px 20px",borderRadius:8,border:`1px solid ${C.red}`,background:C.redLight,color:C.red,fontFamily:"'DM Sans'",fontWeight:700,fontSize:13,cursor:"pointer" }}>
+                    🏁 End Match
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {isCompleted && (
+            <div style={{ textAlign:"center",padding:"10px",background:C.greenLight,borderRadius:8,fontSize:13,fontWeight:700,color:C.green }}>
+              🏁 Match completed
+            </div>
+          )}
+        </div>
+
+        {/* Match timeline */}
+        <div className="card" style={{ padding:20 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,color:C.text }}>Match timeline</div>
+            <span style={{ fontSize:12,color:C.textSoft,fontFamily:"'JetBrains Mono'" }}>{match.events.filter(e=>e.points>0).length} events</span>
+          </div>
+          {match.events.length === 0 ? (
+            <div style={{ textAlign:"center",padding:"30px",color:C.textSoft,fontSize:13 }}>No events recorded yet.</div>
+          ) : (
+            <div>
+              {[...match.events].reverse().map((e,i) => (
+                <div key={e.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:i<match.events.length-1?`1px solid ${C.border}`:"none",background:"transparent" }}>
+                  <div style={{ width:36,textAlign:"center",fontFamily:"'JetBrains Mono'",fontSize:12,fontWeight:600,color:C.textSoft,flexShrink:0 }}>{e.min}'</div>
+                  <div style={{ width:32,height:32,borderRadius:8,background:typeBg[e.type]||C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0 }}>
+                    {SCORE_TYPES.find(s=>s.label===e.type)?.icon || (e.type==="Half Time"?"⏸️":"🏁")}
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13,fontWeight:600,color:typeColor[e.type]||C.text }}>{e.type}{e.points>0?` (+${e.points})`:""}</div>
+                    {e.player && <div style={{ fontSize:11,color:C.textSoft }}>#{e.jersey} {e.player} · {e.team==="home"?match.home:match.away}</div>}
+                  </div>
+                  <div style={{ fontFamily:"'JetBrains Mono'",fontSize:13,fontWeight:700,color:C.text,flexShrink:0 }}>{e.score}</div>
+                  {e.points > 0 && (
+                    <button onClick={() => handleDeleteEvent(match.id, e.id)}
+                      style={{ padding:"3px 8px",borderRadius:5,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:10,cursor:"pointer",flexShrink:0 }}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ── SCHEDULE PAGE ─────────────────────────────────────────────────────────
+  const SchedulePage = () => (
+    <div className="fade-up">
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Match Schedule</h1>
+        <p style={{ fontSize:13,color:C.textSoft }}>Select a match to manage its clock and scoring</p>
+      </div>
+      <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+        {matches.map((m,i) => (
+          <div key={m.id} className="card" onClick={() => { setActiveMatchId(m.id); setPage("clock"); }}
+            style={{ padding:"16px 20px",cursor:"pointer",borderLeft:`3px solid ${m.status==="Live"?C.red:m.status==="Completed"?C.green:C.borderDark}`,transition:"all 0.15s" }}
+            onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.08)"}
+            onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12 }}>
+              <div>
+                <div style={{ fontSize:11,color:C.textSoft,fontFamily:"'JetBrains Mono'",marginBottom:4 }}>{m.tournament} · {m.venue} · {m.date}</div>
+                <div style={{ fontFamily:"'Syne'",fontSize:16,fontWeight:800,color:C.text }}>{m.home} <span style={{ color:C.textSoft,fontWeight:400 }}>vs</span> {m.away}</div>
+              </div>
+              <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                {m.status==="Live" && (
+                  <div style={{ display:"flex",alignItems:"center",gap:5,padding:"3px 10px",background:C.redLight,borderRadius:5 }}>
+                    <span style={{ width:6,height:6,borderRadius:"50%",background:C.red,display:"inline-block",animation:"pulse 1.5s infinite" }}/>
+                    <span style={{ fontSize:10,fontWeight:700,color:C.red,fontFamily:"'JetBrains Mono'" }}>LIVE</span>
+                  </div>
+                )}
+                <span style={{ padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:m.status==="Live"?C.redLight:m.status==="Completed"?C.greenLight:C.surfaceAlt,color:m.status==="Live"?C.red:m.status==="Completed"?C.green:C.textSoft }}>
+                  {m.status==="Live"?m.phase:m.status}
+                </span>
+              </div>
+            </div>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+              <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                <div style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:m.status==="Live"?C.red:C.text }}>
+                  {m.home_score} — {m.away_score}
+                </div>
+                {m.status==="Live" && (
+                  <span style={{ fontFamily:"'JetBrains Mono'",fontSize:13,fontWeight:600,color:C.red }}>{Math.floor(m.clock/60)}'</span>
+                )}
+              </div>
+              <span style={{ fontSize:12,color:C.green,fontWeight:600 }}>Manage →</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const links = [
+    { id:"overview",  label:"Overview",     icon:"📊" },
+    { id:"clock",     label:"Match Clock",  icon:"⏱️" },
+    { id:"schedule",  label:"Schedule",     icon:"📅" },
+    { id:"events",    label:"All Events",   icon:"🏉" },
+  ];
+
+  const liveMatch = matches.find(m => m.status === "Live");
+
   return (
-    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={setPage}>
-      {page==="overview" ? (
+    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={(p) => { setPage(p); if(p==="clock"&&liveMatch) setActiveMatchId(liveMatch.id); }}>
+      {page === "overview" && (
         <div className="fade-up">
-          <div style={{ marginBottom:22 }}>
+          <div style={{ marginBottom:20 }}>
             <h1 style={{ fontFamily:"'Syne'",fontSize:26,fontWeight:800,color:C.text }}>Data Entry</h1>
             <p style={{ fontSize:14,color:C.textSoft }}>{user.name} · Match day operations</p>
           </div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:18 }}>
-            <StatCard icon="📺" label="Matches Today"   value="3" color={C.blue}/>
-            <StatCard icon="⏱️" label="Currently Live"  value="1" color={C.red}/>
-            <StatCard icon="✅" label="Completed Today" value="1" color={C.green}/>
+            <StatCard icon="📅" label="Matches Today"   value={matches.length}                              color={C.blue}/>
+            <StatCard icon="⏱️" label="Live Now"        value={matches.filter(m=>m.status==="Live").length} color={C.red}/>
+            <StatCard icon="✅" label="Completed"       value={matches.filter(m=>m.status==="Completed").length} color={C.green}/>
           </div>
-          <div className="card" style={{ padding:18,marginBottom:14,border:`1.5px solid ${C.red+"40"}`,background:C.redLight }}>
-            <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
-              <span style={{ width:9,height:9,borderRadius:"50%",background:C.red,display:"inline-block",animation:"pulse 1.5s infinite" }}/>
-              <span style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:13,color:C.red }}>LIVE MATCH</span>
+
+          {/* Live match card */}
+          {liveMatch && (
+            <div className="card" style={{ padding:"20px 24px",marginBottom:14,border:`1.5px solid ${C.red}40`,background:"rgba(192,57,43,0.03)" }}>
+              <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:12 }}>
+                <span style={{ width:9,height:9,borderRadius:"50%",background:C.red,display:"inline-block",animation:"pulse 1.5s infinite" }}/>
+                <span style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.red }}>LIVE MATCH</span>
+                <span style={{ fontSize:12,color:C.textSoft,fontFamily:"'JetBrains Mono'" }}>{liveMatch.phase} · {Math.floor(liveMatch.clock/60)}'</span>
+              </div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:16,alignItems:"center",marginBottom:14 }}>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ fontFamily:"'Syne'",fontSize:16,fontWeight:800,color:C.text }}>{liveMatch.home}</div>
+                </div>
+                <div style={{ fontFamily:"'Syne'",fontSize:36,fontWeight:800,color:C.red,textAlign:"center" }}>{liveMatch.home_score} — {liveMatch.away_score}</div>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ fontFamily:"'Syne'",fontSize:16,fontWeight:800,color:C.text }}>{liveMatch.away}</div>
+                </div>
+              </div>
+              <div style={{ display:"flex",gap:10 }}>
+                <button className="btn-primary" onClick={() => { setActiveMatchId(liveMatch.id); setPage("clock"); }} style={{ flex:1,fontSize:13 }}>⏱️ Manage clock →</button>
+                <button onClick={() => { setActiveMatchId(liveMatch.id); setShowScoreModal(true); }}
+                  style={{ flex:1,padding:"10px",borderRadius:8,border:`1px solid ${C.green}`,background:C.greenLight,color:C.green,fontFamily:"'DM Sans'",fontWeight:700,fontSize:13,cursor:"pointer" }}>
+                  🏉 Record event
+                </button>
+              </div>
             </div>
-            <div style={{ fontFamily:"'Syne'",fontSize:17,fontWeight:800,color:C.text,marginBottom:3 }}>Nairobi Rhinos vs Kisumu Tigers</div>
-            <div style={{ fontSize:12,color:C.textSoft,marginBottom:12 }}>RFUEA Ground · KRU Cup Final · 2nd Half 58'</div>
-            <button className="btn-primary" onClick={()=>setPage("clock")} style={{ fontSize:13 }}>⏱️ Manage match clock →</button>
-          </div>
+          )}
+
+          {/* Today's schedule */}
           <div className="card" style={{ padding:20 }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Today's schedule</div>
-            {[
-              { time:"14:00",home:"Nairobi Rhinos",away:"Kisumu Tigers", status:"Live",      venue:"RFUEA Ground"  },
-              { time:"16:30",home:"Mombasa Lions", away:"Thika Panthers",status:"Scheduled", venue:"Mombasa Arena" },
-              { time:"18:00",home:"Nakuru Eagles", away:"Eldoret Bulls",  status:"Scheduled", venue:"Nakuru Stad."  },
-            ].map((m,i)=>(
-              <div key={i} style={{ display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:i<2?`1px solid ${C.border}`:"none" }}>
-                <span style={{ fontFamily:"'JetBrains Mono'",fontSize:12,fontWeight:600,color:C.textSoft,flexShrink:0,width:46 }}>{m.time}</span>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15 }}>Today's schedule</div>
+              <button className="btn-outline-green" onClick={() => setPage("schedule")} style={{ fontSize:11,padding:"4px 12px" }}>View all</button>
+            </div>
+            {matches.map((m,i) => (
+              <div key={m.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:i<matches.length-1?`1px solid ${C.border}`:"none" }}>
+                <span style={{ fontFamily:"'JetBrains Mono'",fontSize:12,fontWeight:600,color:C.textSoft,flexShrink:0,width:50 }}>{m.date.split(" ")[1]}</span>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{m.home} vs {m.away}</div>
                   <div style={{ fontSize:11,color:C.textSoft }}>{m.venue}</div>
                 </div>
-                <Badge label={m.status} color={m.status==="Live"?C.red:C.blue}/>
+                {m.status==="Live"
+                  ? <div style={{ fontFamily:"'Syne'",fontWeight:800,fontSize:16,color:C.red }}>{m.home_score}—{m.away_score}</div>
+                  : <span style={{ padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:m.status==="Completed"?C.greenLight:C.surfaceAlt,color:m.status==="Completed"?C.green:C.textSoft }}>{m.status}</span>
+                }
               </div>
             ))}
           </div>
         </div>
-      ) : <ComingSoon icon={links.find(l=>l.id===page)?.icon} label={links.find(l=>l.id===page)?.label}/>}
+      )}
+
+      {page === "clock"    && <MatchClockPage match={activeMatchId ? getMatch(activeMatchId) : liveMatch}/>}
+      {page === "schedule" && <SchedulePage/>}
+      {page === "events"   && (
+        <div className="fade-up">
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text,marginBottom:20 }}>All Events</h1>
+          {matches.map(m => m.events.length > 0 && (
+            <div key={m.id} style={{ marginBottom:20 }}>
+              <div style={{ fontSize:13,fontWeight:700,color:C.text,marginBottom:10,padding:"8px 12px",background:C.surfaceAlt,borderRadius:8 }}>{m.home} vs {m.away}</div>
+              {[...m.events].reverse().map((e,i) => (
+                <div key={e.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"8px 12px",borderBottom:`1px solid ${C.border}` }}>
+                  <span style={{ fontFamily:"'JetBrains Mono'",fontSize:11,color:C.textSoft,width:30 }}>{e.min}'</span>
+                  <span style={{ fontSize:16 }}>{SCORE_TYPES.find(s=>s.label===e.type)?.icon||"⏱️"}</span>
+                  <div style={{ flex:1 }}>
+                    <span style={{ fontSize:13,fontWeight:600,color:typeColor[e.type]||C.text }}>{e.type}</span>
+                    {e.player && <span style={{ fontSize:12,color:C.textSoft }}> · #{e.jersey} {e.player}</span>}
+                  </div>
+                  <span style={{ fontFamily:"'JetBrains Mono'",fontSize:13,fontWeight:700 }}>{e.score}</span>
+                  {e.points > 0 && (
+                    <button onClick={() => handleDeleteEvent(m.id,e.id)} style={{ padding:"2px 8px",borderRadius:4,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:10,cursor:"pointer" }}>✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </DashboardShell>
   );
 };
+
 
 const MasterRefereeDashboard = ({ user, onLogout }) => {
   const [page, setPage] = useState("overview");
@@ -2014,6 +2554,7 @@ const MedicDashboard = ({ user, onLogout }) => {
 export default function App() {
   const [view, setView] = useState("landing");
   const [user, setUser] = useState(null);
+  const [liveMatches, setLiveMatches] = useState([]);
 
   const handleLogin = (u) => { setUser(u); setView("dashboard"); };
   const handleLogout = () => { setUser(null); setView("landing"); };
@@ -2027,7 +2568,7 @@ export default function App() {
       {view==="landing"          && <LandingPage onLogin={()=>setView("login")} onRegister={()=>setView("register")} onPublic={()=>setView("public")}/>}
       {view==="register"         && <RegisterPage onBack={()=>setView("login")} onSuccess={handleRegisterSuccess}/>}
       {view==="login"            && <LoginPage onBack={()=>setView("register")} onLogin={handleLogin}/>}
-      {view==="public"           && <PublicPage onBack={()=>setView("landing")}/>}
+      {view==="public"           && <PublicPage onBack={()=>setView("landing")} liveMatches={liveMatches}/>}
       {view==="register_success" && (
         <div style={{ minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24 }}>
           <div className="card fade-up scale-in" style={{ padding:"44px 52px",textAlign:"center",maxWidth:460 }}>
@@ -2048,7 +2589,7 @@ export default function App() {
           {user.role==="super_admin"          && <SuperAdminDashboard          {...p}/>}
           {user.role==="tournament_organizer"  && <TournamentOrganizerDashboard {...p}/>}
           {user.role==="team_manager"          && <TeamManagerDashboard         {...p}/>}
-          {user.role==="data_entry"            && <DataEntryDashboard           {...p}/>}
+          {user.role==="data_entry"            && <DataEntryDashboard           {...p} liveMatches={liveMatches} setLiveMatches={setLiveMatches}/>}
           {user.role==="master_referee"        && <MasterRefereeDashboard       {...p}/>}
           {user.role==="medic"                 && <MedicDashboard               {...p}/>}
         </>
