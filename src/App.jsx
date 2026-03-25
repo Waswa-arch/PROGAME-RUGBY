@@ -700,267 +700,518 @@ const PublicPage = ({ onBack, liveMatches: externalLive }) => {
 // ─── ROLE DASHBOARDS ──────────────────────────────────────────────────────────
 const SuperAdminDashboard = ({ user, onLogout }) => {
   const [page, setPage] = useState("overview");
+
+  // ── MOCK DATA ──────────────────────────────────────────────────────────────
+  const [pendingRegistrations, setPendingRegistrations] = useState([
+    { id:"r1", name:"Wycliffe Oduya",  email:"wycliffe@gmail.com",    role:"team_manager",  team:"Thika Panthers RFC",  phone:"+254711000001", submitted:"Mar 23 09:00", status:"Pending" },
+    { id:"r2", name:"Grace Muthoni",   email:"grace@medicpro.com",    role:"medic",         team:"Nakuru Eagles RFC",   phone:"+254712000002", submitted:"Mar 23 11:30", status:"Pending" },
+    { id:"r3", name:"Hassan Abdi",     email:"hassan@data.com",       role:"data_entry",    team:"—",                   phone:"+254713000003", submitted:"Mar 22 14:00", status:"Pending" },
+    { id:"r4", name:"Amina Wanjiru",   email:"amina@ref.co.ke",       role:"master_referee",team:"—",                   phone:"+254714000004", submitted:"Mar 22 08:00", status:"Pending" },
+    { id:"r5", name:"Felix Omondi",    email:"felix@lions.co.ke",     role:"team_manager",  team:"Mombasa Lions RFC",   phone:"+254715000005", submitted:"Mar 21 16:00", status:"Pending" },
+  ]);
+
+  const [allUsers, setAllUsers] = useState([
+    { id:"u1", name:"Super Admin",      email:"admin@progame.com",      role:"super_admin",         status:"Active",   last_login:"Just now",        team:"—" },
+    { id:"u2", name:"James Mwangi",     email:"organizer@progame.com",  role:"tournament_organizer", status:"Active",   last_login:"Mar 23 08:00",    team:"—" },
+    { id:"u3", name:"Coach Kamau",      email:"manager@nairobifc.com",  role:"team_manager",        status:"Active",   last_login:"Mar 23 10:00",    team:"Nairobi Rhinos RFC" },
+    { id:"u4", name:"Data Entry",       email:"data@progame.com",       role:"data_entry",          status:"Active",   last_login:"Mar 23 14:00",    team:"—" },
+    { id:"u5", name:"Ref John Omondi",  email:"referee@progame.com",    role:"master_referee",      status:"Active",   last_login:"Mar 23 13:30",    team:"—" },
+    { id:"u6", name:"Dr. Wanjiku",      email:"medic@progame.com",      role:"medic",               status:"Active",   last_login:"Mar 23 15:00",    team:"—" },
+    { id:"u7", name:"Brian Wekesa",     email:"brian@thika.co.ke",      role:"team_manager",        status:"Suspended",last_login:"Mar 20 09:00",    team:"Thika Panthers RFC" },
+    { id:"u8", name:"Mary Akinyi",      email:"mary@data.com",          role:"data_entry",          status:"Active",   last_login:"Mar 22 11:00",    team:"—" },
+  ]);
+
+  const [disputes, setDisputes] = useState([
+    { id:"d1", title:"Duplicate player registration",       reporter:"Coach Kamau",  against:"Kisumu Tigers RFC",   description:"Player James Ochieng appears in both Nairobi Rhinos and Kisumu Tigers squad for KRU Cup 2025. ID number ID10000099 used twice.",    severity:"High",   status:"Open",     created:"Mar 22 10:00", tournament:"KRU Cup 2025" },
+    { id:"d2", title:"Unauthorized team manager account",   reporter:"James Mwangi", against:"Thika Panthers RFC",  description:"Brian Wekesa registered as Team Manager for Thika Panthers RFC without club authorization. Club officials have raised concern.",        severity:"High",   status:"Open",     created:"Mar 21 14:00", tournament:"KRU Cup 2025" },
+    { id:"d3", title:"Incorrect match score submitted",     reporter:"Ref Omondi",   against:"Data Entry",          description:"Match score for Mombasa Lions vs Nakuru Eagles was recorded incorrectly (42-7 instead of 24-7). Data entry guy disputes referee record.", severity:"Medium", status:"In review",created:"Mar 20 16:00", tournament:"KRU Cup 2025" },
+    { id:"d4", title:"Player age falsification suspected",  reporter:"James Mwangi", against:"Eldoret Bulls RFC",   description:"Player Daniel Baraka's Kenyan ID shows 1998 birth year but registration form states 2003. Facial recognition also flagged discrepancy.",   severity:"High",   status:"Resolved", created:"Mar 18 09:00", tournament:"KRU Cup 2025" },
+  ]);
+
+  const [tournaments] = useState([
+    { id:"t1", name:"KRU Cup 2025",    organizer:"James Mwangi", format:"Group+KO", teams:8,  status:"Active",   created:"Mar 1" },
+    { id:"t2", name:"KRU League 2025", organizer:"James Mwangi", format:"League",   teams:12, status:"Completed",created:"Jan 15" },
+    { id:"t3", name:"U20 Championship",organizer:"James Mwangi", format:"Knockout", teams:3,  status:"Draft",    created:"Mar 20" },
+  ]);
+
+  const [selectedDispute, setSelectedDispute] = useState(null);
+  const [selectedUser, setSelectedUser]       = useState(null);
+  const [resolution, setResolution]           = useState("");
+  const [userSearch, setUserSearch]           = useState("");
+
+  // ── ACTIONS ────────────────────────────────────────────────────────────────
+  const approveReg = (id) => {
+    const reg = pendingRegistrations.find(r=>r.id===id);
+    setPendingRegistrations(prev=>prev.filter(r=>r.id!==id));
+    setAllUsers(prev=>[...prev,{ id:`u${Date.now()}`, name:reg.name, email:reg.email, role:reg.role, status:"Active", last_login:"Never", team:reg.team }]);
+  };
+  const rejectReg  = (id) => setPendingRegistrations(prev=>prev.map(r=>r.id===id?{...r,status:"Rejected"}:r));
+  const suspendUser= (id) => setAllUsers(prev=>prev.map(u=>u.id===id?{...u,status:u.status==="Suspended"?"Active":"Suspended"}:u));
+  const resolveDispute = (id) => {
+    if (!resolution.trim()) return;
+    setDisputes(prev=>prev.map(d=>d.id===id?{...d,status:"Resolved",resolution,resolved_at:"Just now"}:d));
+    setSelectedDispute(null);
+    setResolution("");
+  };
+
+  // ── HELPERS ────────────────────────────────────────────────────────────────
+  const roleColor = { super_admin:C.purple, tournament_organizer:C.blue, team_manager:C.green, data_entry:C.amber, master_referee:C.coral, medic:C.teal };
+  const roleBg    = { super_admin:C.purpleLight, tournament_organizer:C.blueLight, team_manager:C.greenLight, data_entry:C.amberLight, master_referee:C.coralLight, medic:C.tealLight };
+  const roleLabel = { super_admin:"Super Admin", tournament_organizer:"Org", team_manager:"Team Mgr", data_entry:"Data Entry", master_referee:"Referee", medic:"Medic" };
+  const sevColor  = { High:C.red, Medium:C.amber, Low:C.blue };
+  const sevBg     = { High:C.redLight, Medium:C.amberLight, Low:C.blueLight };
+
+  const filteredUsers = allUsers.filter(u =>
+    !userSearch ||
+    u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.role.includes(userSearch.toLowerCase())
+  );
+
+  // ── SLIDE PANEL ────────────────────────────────────────────────────────────
+  const SlidePanel = ({ title, subtitle, onClose, children }) => (
+    <>
+      <div onClick={onClose} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:200,backdropFilter:"blur(2px)" }}/>
+      <div style={{ position:"fixed",top:0,right:0,bottom:0,width:500,background:"#fff",borderLeft:`1px solid ${C.border}`,zIndex:201,display:"flex",flexDirection:"column",animation:"slideInPanel 0.25s ease",overflowY:"auto" }}>
+        <div style={{ padding:"18px 22px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0 }}>
+          <div>
+            <div style={{ fontFamily:"'Syne'",fontWeight:800,fontSize:17,color:C.text }}>{title}</div>
+            {subtitle && <div style={{ fontSize:12,color:C.textSoft,marginTop:2 }}>{subtitle}</div>}
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",cursor:"pointer",fontSize:22,color:C.textSoft }}>×</button>
+        </div>
+        <div style={{ padding:"20px 22px",flex:1 }}>{children}</div>
+      </div>
+    </>
+  );
+
+  const DR = ({ label, value, valueColor }) => (
+    <div style={{ display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}` }}>
+      <span style={{ fontSize:12,color:C.textSoft }}>{label}</span>
+      <span style={{ fontSize:13,fontWeight:600,color:valueColor||C.text }}>{value||"—"}</span>
+    </div>
+  );
+
+  // ── REGISTRATIONS PAGE ─────────────────────────────────────────────────────
+  const RegistrationsPage = () => {
+    const pending  = pendingRegistrations.filter(r=>r.status==="Pending");
+    const rejected = pendingRegistrations.filter(r=>r.status==="Rejected");
+    return (
+      <div className="fade-up">
+        <div style={{ marginBottom:20 }}>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Account Registrations</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>{pending.length} pending review</p>
+        </div>
+        {pending.length > 0 && (
+          <Alert type="warning">⏳ {pending.length} account{pending.length>1?"s":""} waiting for your approval before they can access the platform.</Alert>
+        )}
+        <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:10 }}>Pending ({pending.length})</div>
+        <div style={{ display:"flex",flexDirection:"column",gap:10,marginBottom:24 }}>
+          {pending.map((r,i)=>(
+            <div key={r.id} className="card" style={{ padding:"16px 20px",borderLeft:`3px solid ${C.amber}` }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+                  <div style={{ width:42,height:42,borderRadius:10,background:roleBg[r.role]||C.greenLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20 }}>
+                    {ROLES[r.role]?.icon}
+                  </div>
+                  <div>
+                    <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,color:C.text }}>{r.name}</div>
+                    <div style={{ fontSize:12,color:C.textSoft }}>{r.email} · {r.phone}</div>
+                  </div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <span style={{ padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:roleBg[r.role],color:roleColor[r.role] }}>{ROLES[r.role]?.label}</span>
+                  <div style={{ fontSize:11,color:C.textDim,marginTop:4,fontFamily:"'JetBrains Mono'" }}>{r.submitted}</div>
+                </div>
+              </div>
+              {r.team !== "—" && (
+                <div style={{ padding:"7px 12px",background:C.greenLight,borderRadius:6,fontSize:12,color:C.green,marginBottom:10,fontWeight:600 }}>
+                  🧩 Registering as Team Manager for: {r.team}
+                </div>
+              )}
+              <div style={{ display:"flex",gap:8 }}>
+                <button onClick={()=>approveReg(r.id)}
+                  style={{ flex:1,padding:"9px",borderRadius:8,border:`1px solid ${C.green}`,background:C.greenLight,color:C.green,fontFamily:"'DM Sans'",fontWeight:700,cursor:"pointer",fontSize:13 }}>
+                  ✓ Approve & activate
+                </button>
+                <button onClick={()=>rejectReg(r.id)}
+                  style={{ flex:"0 0 100px",padding:"9px",borderRadius:8,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontFamily:"'DM Sans'",fontWeight:700,cursor:"pointer",fontSize:13 }}>
+                  ✕ Reject
+                </button>
+              </div>
+            </div>
+          ))}
+          {pending.length === 0 && (
+            <div style={{ textAlign:"center",padding:"40px",color:C.textSoft,fontSize:14 }}>✅ No pending registrations.</div>
+          )}
+        </div>
+        {rejected.length > 0 && (
+          <>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.textSoft,marginBottom:10 }}>Rejected ({rejected.length})</div>
+            <div className="card" style={{ overflow:"hidden" }}>
+              {rejected.map((r,i)=>(
+                <div key={r.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:i<rejected.length-1?`1px solid ${C.border}`:"none",opacity:0.6 }}>
+                  <span style={{ fontSize:18 }}>{ROLES[r.role]?.icon}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{r.name}</div>
+                    <div style={{ fontSize:11,color:C.textSoft }}>{r.email} · {ROLES[r.role]?.label}</div>
+                  </div>
+                  <span style={{ padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:C.redLight,color:C.red }}>Rejected</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // ── USERS PAGE ─────────────────────────────────────────────────────────────
+  const UsersPage = () => (
+    <div className="fade-up">
+      {selectedUser && (
+        <SlidePanel title={selectedUser.name} subtitle={`${ROLES[selectedUser.role]?.label} · ${selectedUser.email}`} onClose={()=>setSelectedUser(null)}>
+          <DR label="Email"      value={selectedUser.email}/>
+          <DR label="Role"       value={<span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:roleBg[selectedUser.role],color:roleColor[selectedUser.role] }}>{ROLES[selectedUser.role]?.label}</span>}/>
+          <DR label="Team"       value={selectedUser.team}/>
+          <DR label="Status"     value={<span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:selectedUser.status==="Active"?C.greenLight:C.redLight,color:selectedUser.status==="Active"?C.green:C.red }}>{selectedUser.status}</span>}/>
+          <DR label="Last login" value={selectedUser.last_login}/>
+          <div style={{ display:"flex",flexDirection:"column",gap:8,marginTop:18 }}>
+            <button onClick={()=>{ suspendUser(selectedUser.id); setSelectedUser(null); }}
+              style={{ padding:"10px",borderRadius:8,border:`1px solid ${selectedUser.status==="Suspended"?C.green:C.red}`,background:selectedUser.status==="Suspended"?C.greenLight:C.redLight,color:selectedUser.status==="Suspended"?C.green:C.red,fontFamily:"'DM Sans'",fontWeight:700,cursor:"pointer",fontSize:13 }}>
+              {selectedUser.status==="Suspended"?"✓ Reactivate account":"🚫 Suspend account"}
+            </button>
+            <button style={{ padding:"10px",borderRadius:8,border:`1px solid ${C.amber}`,background:C.amberLight,color:C.amber,fontFamily:"'DM Sans'",fontWeight:700,cursor:"pointer",fontSize:13 }}>
+              🔑 Reset password
+            </button>
+            {selectedUser.role==="team_manager" && (
+              <button style={{ padding:"10px",borderRadius:8,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontFamily:"'DM Sans'",fontWeight:700,cursor:"pointer",fontSize:13 }}>
+                🗑 Delete account (fake registration)
+              </button>
+            )}
+          </div>
+        </SlidePanel>
+      )}
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18 }}>
+        <div>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>User Accounts</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>{allUsers.length} total · {allUsers.filter(u=>u.status==="Suspended").length} suspended</p>
+        </div>
+        <input className="input-field" placeholder="Search users..." value={userSearch} onChange={e=>setUserSearch(e.target.value)} style={{ width:220,padding:"8px 14px",fontSize:13 }}/>
+      </div>
+
+      {/* Role breakdown */}
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,marginBottom:18 }}>
+        {Object.entries(ROLES).map(([key,r])=>(
+          <div key={key} className="card" style={{ padding:"10px 12px",textAlign:"center" }}>
+            <div style={{ fontSize:18,marginBottom:4 }}>{r.icon}</div>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:18,color:r.color }}>{allUsers.filter(u=>u.role===key).length}</div>
+            <div style={{ fontSize:10,color:C.textSoft }}>{r.label.split(" ")[0]}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ overflow:"hidden" }}>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 100px 90px 110px 60px",padding:"0 16px",height:38,alignItems:"center",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+          {["Name","Email","Role","Status","Last login","Action"].map(h=>(
+            <span key={h} style={{ fontSize:10,color:C.textSoft,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'JetBrains Mono'" }}>{h}</span>
+          ))}
+        </div>
+        {filteredUsers.map((u,i)=>(
+          <div key={u.id} onClick={()=>setSelectedUser(u)}
+            style={{ display:"grid",gridTemplateColumns:"1fr 1fr 100px 90px 110px 60px",alignItems:"center",padding:"0 16px",minHeight:52,borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:i%2===0?"transparent":C.surfaceAlt,opacity:u.status==="Suspended"?0.65:1 }}
+            onMouseEnter={e=>e.currentTarget.style.background=C.greenLight}
+            onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"transparent":C.surfaceAlt}>
+            <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+              <div style={{ width:30,height:30,borderRadius:7,background:roleBg[u.role],display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0 }}>{ROLES[u.role]?.icon}</div>
+              <span style={{ fontSize:13,fontWeight:600,color:C.text }}>{u.name}</span>
+            </div>
+            <span style={{ fontSize:12,color:C.textSoft,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{u.email}</span>
+            <span style={{ padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600,background:roleBg[u.role],color:roleColor[u.role] }}>{roleLabel[u.role]}</span>
+            <span style={{ padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:u.status==="Active"?C.greenLight:C.redLight,color:u.status==="Active"?C.green:C.red }}>{u.status}</span>
+            <span style={{ fontSize:11,color:C.textDim,fontFamily:"'JetBrains Mono'" }}>{u.last_login}</span>
+            <span style={{ fontSize:12,color:C.green,fontWeight:600 }}>View →</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ── DISPUTES PAGE ──────────────────────────────────────────────────────────
+  const DisputesPage = () => {
+    const open     = disputes.filter(d=>d.status==="Open");
+    const review   = disputes.filter(d=>d.status==="In review");
+    const resolved = disputes.filter(d=>d.status==="Resolved");
+
+    return (
+      <div className="fade-up">
+        {selectedDispute && (
+          <SlidePanel title="Dispute Details" subtitle={selectedDispute.title} onClose={()=>{ setSelectedDispute(null); setResolution(""); }}>
+            <div style={{ padding:"10px 14px",background:sevBg[selectedDispute.severity],border:`1px solid ${sevColor[selectedDispute.severity]}28`,borderRadius:8,marginBottom:14 }}>
+              <Badge label={selectedDispute.severity+" priority"} color={sevColor[selectedDispute.severity]}/>
+            </div>
+            <DR label="Reported by"  value={selectedDispute.reporter}/>
+            <DR label="Against"      value={selectedDispute.against}/>
+            <DR label="Tournament"   value={selectedDispute.tournament}/>
+            <DR label="Status"       value={selectedDispute.status}/>
+            <DR label="Filed"        value={selectedDispute.created}/>
+            <div style={{ margin:"14px 0 8px",fontSize:11,color:C.textSoft,fontFamily:"'JetBrains Mono'",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em" }}>Description</div>
+            <div style={{ padding:"10px 14px",background:C.surfaceAlt,borderRadius:8,fontSize:13,color:C.textMid,lineHeight:1.7,marginBottom:14 }}>
+              {selectedDispute.description}
+            </div>
+            {selectedDispute.status==="Resolved" ? (
+              <div style={{ padding:"10px 14px",background:C.greenLight,borderRadius:8,fontSize:13,color:C.green }}>
+                ✅ <strong>Resolution:</strong> {selectedDispute.resolution}
+                <div style={{ fontSize:11,color:C.textSoft,marginTop:4 }}>Resolved {selectedDispute.resolved_at}</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ margin:"14px 0 8px",fontSize:11,color:C.textSoft,fontFamily:"'JetBrains Mono'",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em" }}>Resolution notes</div>
+                <textarea className="input-field" placeholder="Describe the resolution action taken — account suspended, player removed, score corrected..." rows={4}
+                  value={resolution} onChange={e=>setResolution(e.target.value)} style={{ resize:"vertical",marginBottom:12 }}/>
+                <div style={{ display:"flex",gap:8 }}>
+                  <button onClick={()=>resolveDispute(selectedDispute.id)}
+                    disabled={!resolution.trim()}
+                    style={{ flex:1,padding:"10px",borderRadius:8,border:"none",background:resolution.trim()?C.green:C.borderDark,color:"#fff",fontFamily:"'DM Sans'",fontWeight:700,cursor:resolution.trim()?"pointer":"not-allowed",fontSize:13 }}>
+                    ✓ Mark resolved
+                  </button>
+                  <button onClick={()=>setDisputes(prev=>prev.map(d=>d.id===selectedDispute.id?{...d,status:"In review"}:d))}
+                    style={{ flex:"0 0 120px",padding:"10px",borderRadius:8,border:`1px solid ${C.amber}`,background:C.amberLight,color:C.amber,fontFamily:"'DM Sans'",fontWeight:700,cursor:"pointer",fontSize:13 }}>
+                    Under review
+                  </button>
+                </div>
+              </>
+            )}
+          </SlidePanel>
+        )}
+
+        <div style={{ marginBottom:20 }}>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Disputes</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>{open.length} open · {review.length} in review · {resolved.length} resolved</p>
+        </div>
+
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:18 }}>
+          <StatCard icon="🚨" label="Open"      value={open.length}     color={C.red}   sub="Needs attention"/>
+          <StatCard icon="🔍" label="In review" value={review.length}   color={C.amber} sub="Being investigated"/>
+          <StatCard icon="✅" label="Resolved"  value={resolved.length} color={C.green} sub="Closed"/>
+        </div>
+
+        {open.length > 0 && (
+          <Alert type="error">🚨 {open.filter(d=>d.severity==="High").length} high-priority dispute{open.filter(d=>d.severity==="High").length>1?"s":""} require immediate attention.</Alert>
+        )}
+
+        {[{ label:"Open", items:open },{ label:"In Review", items:review },{ label:"Resolved", items:resolved }].map(group => (
+          group.items.length > 0 && (
+            <div key={group.label} style={{ marginBottom:22 }}>
+              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:10 }}>{group.label} ({group.items.length})</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                {group.items.map((d,i)=>(
+                  <div key={d.id} className="card" onClick={()=>setSelectedDispute(d)}
+                    style={{ padding:"14px 18px",cursor:"pointer",borderLeft:`3px solid ${d.status==="Resolved"?C.green:sevColor[d.severity]}` }}
+                    onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.08)"}
+                    onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
+                      <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text }}>{d.title}</div>
+                      <div style={{ display:"flex",gap:6,flexShrink:0,marginLeft:10 }}>
+                        <Badge label={d.severity} color={sevColor[d.severity]} bg={sevBg[d.severity]}/>
+                        <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:d.status==="Resolved"?C.greenLight:d.status==="In review"?C.amberLight:C.redLight,color:d.status==="Resolved"?C.green:d.status==="In review"?C.amber:C.red }}>{d.status}</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:12,color:C.textSoft,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{d.description}</div>
+                    <div style={{ display:"flex",gap:16,fontSize:11,color:C.textDim,fontFamily:"'JetBrains Mono'" }}>
+                      <span>By: {d.reporter}</span>
+                      <span>Against: {d.against}</span>
+                      <span>{d.created}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        ))}
+      </div>
+    );
+  };
+
+  // ── TOURNAMENTS PAGE ───────────────────────────────────────────────────────
+  const TournamentsAdminPage = () => (
+    <div className="fade-up">
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Tournaments</h1>
+        <p style={{ fontSize:13,color:C.textSoft }}>Platform-wide tournament overview</p>
+      </div>
+      <div className="card" style={{ overflow:"hidden" }}>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 140px 80px 60px 90px 80px",padding:"0 16px",height:38,alignItems:"center",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+          {["Tournament","Organizer","Format","Teams","Status","Action"].map(h=>(
+            <span key={h} style={{ fontSize:10,color:C.textSoft,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'JetBrains Mono'" }}>{h}</span>
+          ))}
+        </div>
+        {tournaments.map((t,i)=>(
+          <div key={t.id} style={{ display:"grid",gridTemplateColumns:"1fr 140px 80px 60px 90px 80px",alignItems:"center",padding:"0 16px",height:54,borderBottom:`1px solid ${C.border}`,background:i%2===0?"transparent":C.surfaceAlt }}>
+            <div>
+              <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{t.name}</div>
+              <div style={{ fontSize:11,color:C.textSoft }}>Created {t.created}</div>
+            </div>
+            <span style={{ fontSize:12,color:C.textMid }}>{t.organizer}</span>
+            <span style={{ fontSize:12,color:C.textSoft }}>{t.format}</span>
+            <span style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:18,color:C.blue }}>{t.teams}</span>
+            <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:t.status==="Active"?C.greenLight:t.status==="Completed"?C.surfaceAlt:C.amberLight,color:t.status==="Active"?C.green:t.status==="Completed"?C.textSoft:C.amber }}>{t.status}</span>
+            <button style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:11,cursor:"pointer",fontWeight:600 }}>Suspend</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ── PLATFORM STATS PAGE ────────────────────────────────────────────────────
+  const StatsPage = () => {
+    const roleBreakdown = Object.entries(ROLES).map(([key,r])=>({ label:r.label, value:allUsers.filter(u=>u.role===key).length, color:r.color, icon:r.icon }));
+    return (
+      <div className="fade-up">
+        <div style={{ marginBottom:20 }}>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Platform Statistics</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>System-wide overview</p>
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20 }}>
+          <StatCard icon="👥" label="Total users"        value={allUsers.length}         color={C.blue}   sub="All roles"/>
+          <StatCard icon="🏆" label="Tournaments"        value={tournaments.length}      color={C.green}  sub={`${tournaments.filter(t=>t.status==="Active").length} active`}/>
+          <StatCard icon="⏳" label="Pending approvals"  value={pendingRegistrations.filter(r=>r.status==="Pending").length} color={C.amber}/>
+          <StatCard icon="⚠️" label="Open disputes"      value={disputes.filter(d=>d.status==="Open").length} color={C.red}/>
+        </div>
+
+        {/* User breakdown */}
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16 }}>
+          <div className="card" style={{ padding:20 }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:16 }}>Users by role</div>
+            {roleBreakdown.map((r,i)=>(
+              <div key={i} style={{ marginBottom:12 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5 }}>
+                  <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                    <span style={{ fontSize:14 }}>{r.icon}</span>
+                    <span style={{ fontSize:13,color:C.text }}>{r.label}</span>
+                  </div>
+                  <span style={{ fontFamily:"'JetBrains Mono'",fontSize:13,fontWeight:700,color:r.color }}>{r.value}</span>
+                </div>
+                <div style={{ height:6,background:C.border,borderRadius:3,overflow:"hidden" }}>
+                  <div style={{ height:"100%",width:`${(r.value/allUsers.length)*100}%`,background:r.color,borderRadius:3,transition:"width 0.5s ease" }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="card" style={{ padding:20 }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:16 }}>Platform activity</div>
+            {[
+              { label:"Accounts approved this week",   value:"12",  color:C.green  },
+              { label:"Accounts rejected this week",   value:"2",   color:C.red    },
+              { label:"Disputes resolved this month",  value:"8",   color:C.green  },
+              { label:"Active suspensions",            value:String(allUsers.filter(u=>u.status==="Suspended").length), color:C.red },
+              { label:"Players in pool",               value:"648", color:C.blue   },
+              { label:"Squads submitted",              value:"6",   color:C.purple },
+            ].map((s,i)=>(
+              <div key={i} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:i<5?`1px solid ${C.border}`:"none" }}>
+                <span style={{ fontSize:13,color:C.textMid }}>{s.label}</span>
+                <span style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:18,color:s.color }}>{s.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── LINKS ──────────────────────────────────────────────────────────────────
   const links = [
-    { id:"overview",      label:"Overview",       icon:"📊" },
-    { id:"users",         label:"User Accounts",  icon:"👥" },
-    { id:"registrations", label:"Registrations",  icon:"📋", badge:"3" },
-    { id:"disputes",      label:"Disputes",       icon:"⚠️", badge:"2" },
-    { id:"tournaments",   label:"Tournaments",    icon:"🏆" },
-    { id:"stats",         label:"Platform Stats", icon:"📈" },
+    { id:"overview",      label:"Overview",        icon:"📊" },
+    { id:"registrations", label:"Registrations",   icon:"📋", badge:pendingRegistrations.filter(r=>r.status==="Pending").length>0?String(pendingRegistrations.filter(r=>r.status==="Pending").length):undefined },
+    { id:"users",         label:"User Accounts",   icon:"👥" },
+    { id:"disputes",      label:"Disputes",        icon:"⚠️", badge:disputes.filter(d=>d.status==="Open").length>0?String(disputes.filter(d=>d.status==="Open").length):undefined },
+    { id:"tournaments",   label:"Tournaments",     icon:"🏆" },
+    { id:"stats",         label:"Platform Stats",  icon:"📈" },
   ];
+
   return (
-    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={setPage}>
-      {page==="overview" ? (
+    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={p=>{setPage(p);setSelectedDispute(null);setSelectedUser(null);}}>
+      {page==="overview" && (
         <div className="fade-up">
-          <div style={{ marginBottom:24 }}>
+          <div style={{ marginBottom:20 }}>
             <h1 style={{ fontFamily:"'Syne'",fontSize:26,fontWeight:800,color:C.text }}>Platform Overview</h1>
             <p style={{ fontSize:14,color:C.textSoft }}>Welcome back, {user.name}</p>
           </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:22 }}>
-            <StatCard icon="👥" label="Total Users"        value="142" color={C.blue}   sub="Across all roles"/>
-            <StatCard icon="🏆" label="Active Tournaments" value="3"   color={C.green}  sub="KRU Cup, League, U20"/>
-            <StatCard icon="🏉" label="Players in Pool"    value="648" color={C.gold}   sub="+24 this week"/>
-            <StatCard icon="⚠️" label="Open Disputes"      value="2"   color={C.red}    sub="Pending review"/>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:18 }}>
+            <StatCard icon="👥" label="Total Users"        value={allUsers.length}           color={C.blue}   sub="All roles"/>
+            <StatCard icon="🏆" label="Active Tournaments" value={tournaments.filter(t=>t.status==="Active").length} color={C.green}/>
+            <StatCard icon="📋" label="Pending Approvals"  value={pendingRegistrations.filter(r=>r.status==="Pending").length} color={C.amber} sub="Awaiting review"/>
+            <StatCard icon="⚠️" label="Open Disputes"      value={disputes.filter(d=>d.status==="Open").length} color={C.red} sub="Needs attention"/>
           </div>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
-            <div className="card" style={{ padding:20 }}>
-              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Pending approvals</div>
-              {[
-                { name:"Wycliffe Oduya", role:"Team Manager",  team:"Thika Panthers RFC", time:"2h ago" },
-                { name:"Grace Muthoni",  role:"Medic",         team:"Nakuru Eagles RFC",  time:"5h ago" },
-                { name:"Hassan Abdi",    role:"Data Entry",    team:"—",                  time:"1d ago" },
-              ].map((u,i)=>(
-                <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<2?`1px solid ${C.border}`:"none" }}>
-                  <div style={{ width:34,height:34,borderRadius:8,background:C.greenLight,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.green }}>{u.name[0]}</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{u.name}</div>
-                    <div style={{ fontSize:11,color:C.textSoft }}>{u.role} · {u.team}</div>
-                  </div>
-                  <span style={{ fontSize:11,color:C.textDim }}>{u.time}</span>
-                  <div style={{ display:"flex",gap:5 }}>
-                    <button style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.green}`,background:"transparent",color:C.green,fontSize:11,cursor:"pointer",fontWeight:600 }}>✓</button>
-                    <button style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:11,cursor:"pointer" }}>✕</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="card" style={{ padding:20 }}>
-              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Open disputes</div>
-              {[
-                { title:"Duplicate player registration", team:"Nairobi Rhinos RFC", sev:"High",   time:"3h ago" },
-                { title:"Unauthorized team manager",     team:"Kisumu Tigers RFC",  sev:"Medium", time:"1d ago" },
-              ].map((d,i)=>(
-                <div key={i} style={{ padding:"11px 13px",borderRadius:8,border:`1px solid ${d.sev==="High"?C.red+"40":C.amber+"40"}`,background:d.sev==="High"?C.redLight:C.amberLight,marginBottom:8 }}>
-                  <div style={{ fontSize:13,fontWeight:600,color:C.text,marginBottom:4 }}>{d.title}</div>
-                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                    <span style={{ fontSize:11,color:C.textSoft }}>{d.team} · {d.time}</span>
-                    <Badge label={d.sev} color={d.sev==="High"?C.red:C.amber}/>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : <ComingSoon icon={links.find(l=>l.id===page)?.icon} label={links.find(l=>l.id===page)?.label}/>}
-    </DashboardShell>
-  );
-};
 
-
-// ─── CREATE TOURNAMENT FORM (standalone — avoids focus loss) ─────────────────
-const CreateTournamentForm = ({ onSuccess, onCancel }) => {
-  const FORMAT_OPTIONS = ["Group + Knockout","League","Knockout only","Round Robin"];
-  const emptyT = { name:"",venue:"",start:"",end:"",format:"Group + Knockout",deadline:"",max_teams:"12",max_squad:"23" };
-  const [tForm, setTForm]     = React.useState(emptyT);
-  const [tError, setTError]   = React.useState("");
-  const [tSuccess, setTSuccess] = React.useState(false);
-  const [tLoading, setTLoading] = React.useState(false);
-  const setT = (k,v) => setTForm(f => ({ ...f,[k]:v }));
-
-  const handleCreate = async () => {
-    setTError("");
-    if (!tForm.name)     { setTError("Tournament name is required.");     return; }
-    if (!tForm.venue)    { setTError("Venue is required.");               return; }
-    if (!tForm.start)    { setTError("Start date is required.");          return; }
-    if (!tForm.end)      { setTError("End date is required.");            return; }
-    if (!tForm.deadline) { setTError("Registration deadline is required."); return; }
-    setTLoading(true);
-    await new Promise(r => setTimeout(r,1200));
-    onSuccess({ ...tForm, max_teams:Number(tForm.max_teams), max_squad:Number(tForm.max_squad), status:"Open", teams_registered:0 });
-    setTForm(emptyT);
-    setTLoading(false);
-    setTSuccess(true);
-    setTimeout(() => setTSuccess(false), 2000);
-  };
-
-  return (
-    <div className="fade-up">
-      <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:22 }}>
-        <button className="btn-ghost" onClick={onCancel} style={{ padding:"7px 14px",fontSize:13 }}>← Back</button>
-        <div>
-          <h2 style={{ fontFamily:"'Syne'",fontSize:22,fontWeight:800,color:C.text }}>Create Tournament</h2>
-          <p style={{ fontSize:13,color:C.textSoft }}>Fill in the tournament details below</p>
-        </div>
-      </div>
-      {tSuccess && (
-        <div style={{ padding:"14px 18px",background:C.greenLight,border:`1px solid ${C.green}28`,borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:22 }}>🎉</span>
-          <div><div style={{ fontSize:14,fontWeight:700,color:C.green }}>Tournament created!</div><div style={{ fontSize:12,color:C.textSoft }}>Team managers can now register.</div></div>
-        </div>
-      )}
-      {tError && <div style={{ padding:"10px 14px",background:C.redLight,border:`1px solid ${C.red}28`,borderRadius:8,marginBottom:14,fontSize:13,color:C.red }}>⚠️ {tError}</div>}
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:18 }}>
-        <div className="card" style={{ padding:"20px 22px" }}>
-          <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Tournament details</div>
-          <Field label="Tournament Name *"><Input placeholder="e.g. KRU Cup 2025" value={tForm.name} onChange={e=>setT("name",e.target.value)}/></Field>
-          <Field label="Venue *"><Input placeholder="e.g. RFUEA Ground, Nairobi" value={tForm.venue} onChange={e=>setT("venue",e.target.value)}/></Field>
-          <Field label="Match Format *"><SelectField value={tForm.format} onChange={e=>setT("format",e.target.value)} options={FORMAT_OPTIONS.map(f=>({ value:f,label:f }))}/></Field>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-            <Field label="Start Date *"><Input type="date" value={tForm.start} onChange={e=>setT("start",e.target.value)}/></Field>
-            <Field label="End Date *"><Input type="date" value={tForm.end} onChange={e=>setT("end",e.target.value)}/></Field>
-          </div>
-        </div>
-        <div className="card" style={{ padding:"20px 22px" }}>
-          <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Registration settings</div>
-          <Field label="Registration Deadline *"><Input type="date" value={tForm.deadline} onChange={e=>setT("deadline",e.target.value)}/></Field>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-            <Field label="Max Teams"><Input type="number" min="2" max="32" value={tForm.max_teams} onChange={e=>setT("max_teams",e.target.value)}/></Field>
-            <Field label="Max Squad Size"><Input type="number" min="15" max="30" value={tForm.max_squad} onChange={e=>setT("max_squad",e.target.value)}/></Field>
-          </div>
-          <div style={{ padding:"10px 12px",background:C.surfaceAlt,borderRadius:8,border:`1px solid ${C.border}`,fontSize:12,color:C.textMid,lineHeight:1.6,marginTop:8 }}>
-            ℹ️ Once created the tournament will be Open — team managers can register immediately.
-          </div>
-        </div>
-      </div>
-      <div style={{ display:"flex",gap:10,marginTop:18 }}>
-        <button className="btn-ghost" onClick={onCancel} style={{ flex:"0 0 120px" }}>Cancel</button>
-        <button className="btn-primary" onClick={handleCreate} disabled={tLoading} style={{ flex:1,fontSize:15 }}>
-          {tLoading ? "Creating..." : "Create Tournament →"}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ─── ADD PLAYER FORM (standalone — avoids focus loss) ─────────────────────────
-const AddPlayerForm = ({ onSuccess, onCancel, existingJerseys }) => {
-  const POSITIONS = ["Loosehead Prop","Hooker","Tighthead Prop","Lock","Flanker","Number 8","Scrum-half","Fly-half","Centre","Winger","Full-back"];
-  const emptyForm = { name:"",dob:"",phone:"",jersey:"",position:"",kin_name:"",kin_phone:"",photo:null,photoPreview:null,id_front:null,id_frontPreview:null,id_back:null,id_backPreview:null };
-  const [form, setForm]         = React.useState(emptyForm);
-  const [formError, setFormError] = React.useState("");
-  const [formSuccess, setFormSuccess] = React.useState(false);
-  const [submitting, setSubmitting]   = React.useState(false);
-  const setF = (k,v) => setForm(f=>({ ...f,[k]:v }));
-
-  const handleFileUpload = (key, previewKey, file) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => { setF(key,file); setF(previewKey,e.target.result); };
-    reader.readAsDataURL(file);
-  };
-
-  const UploadBox = ({ label, preview, onUpload, icon }) => (
-    <div>
-      <label className="label">{label}</label>
-      <label style={{ display:"block",cursor:"pointer" }}>
-        <input type="file" accept="image/*" style={{ display:"none" }} onChange={e=>onUpload(e.target.files[0])}/>
-        <div style={{ border:`2px dashed ${preview?C.green:C.borderDark}`,borderRadius:10,padding:preview?"8px":"18px 12px",textAlign:"center",background:preview?C.greenLight:C.surfaceAlt,transition:"all 0.18s",minHeight:preview?"auto":80,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5 }}>
-          {preview ? (
-            <div style={{ position:"relative" }}>
-              <img src={preview} alt={label} style={{ width:"100%",maxHeight:110,objectFit:"cover",borderRadius:7,display:"block" }}/>
-              <div style={{ position:"absolute",top:4,right:4,background:C.green,color:"#fff",borderRadius:4,fontSize:10,fontWeight:700,padding:"2px 6px" }}>✓</div>
-            </div>
-          ) : (
-            <><span style={{ fontSize:24 }}>{icon}</span><div style={{ fontSize:12,fontWeight:600,color:C.textMid }}>Click to upload</div><div style={{ fontSize:11,color:C.textSoft }}>JPG, PNG · Max 5MB</div></>
+          {pendingRegistrations.filter(r=>r.status==="Pending").length>0 && (
+            <Alert type="warning">
+              ⏳ {pendingRegistrations.filter(r=>r.status==="Pending").length} account{pendingRegistrations.filter(r=>r.status==="Pending").length>1?"s":""} waiting for approval.{" "}
+              <button onClick={()=>setPage("registrations")} style={{ background:"none",border:"none",color:C.amber,cursor:"pointer",fontWeight:700,fontSize:13 }}>Review now →</button>
+            </Alert>
           )}
-        </div>
-      </label>
-    </div>
-  );
+          {disputes.filter(d=>d.status==="Open"&&d.severity==="High").length>0 && (
+            <Alert type="error">
+              🚨 {disputes.filter(d=>d.status==="Open"&&d.severity==="High").length} high-priority dispute{disputes.filter(d=>d.status==="Open"&&d.severity==="High").length>1?"s":""} require immediate action.{" "}
+              <button onClick={()=>setPage("disputes")} style={{ background:"none",border:"none",color:C.red,cursor:"pointer",fontWeight:700,fontSize:13 }}>View disputes →</button>
+            </Alert>
+          )}
 
-  const handleSubmit = async () => {
-    setFormError("");
-    if (!form.name)     { setFormError("Player full name is required."); return; }
-    if (!form.dob)      { setFormError("Date of birth is required."); return; }
-    if (!form.phone)    { setFormError("Phone number is required."); return; }
-    if (!form.jersey)   { setFormError("Jersey number is required."); return; }
-    if (!form.position) { setFormError("Position is required."); return; }
-    if (!form.kin_name) { setFormError("Next of kin name is required."); return; }
-    if (!form.kin_phone){ setFormError("Next of kin phone is required."); return; }
-    if (!form.photo)    { setFormError("Player photo is required."); return; }
-    if (!form.id_front) { setFormError("Kenyan ID front photo is required."); return; }
-    if (!form.id_back)  { setFormError("Kenyan ID back photo is required."); return; }
-    if (existingJerseys.includes(Number(form.jersey))) { setFormError(`Jersey #${form.jersey} is already taken.`); return; }
-    setSubmitting(true);
-    await new Promise(r => setTimeout(r,1200));
-    onSuccess({ name:form.name, dob:form.dob, phone:form.phone, jersey:Number(form.jersey), position:form.position, kin_name:form.kin_name, kin_phone:form.kin_phone, photo:form.photoPreview, id_front:form.id_frontPreview, id_back:form.id_backPreview });
-    setSubmitting(false);
-    setFormSuccess(true);
-    setTimeout(() => setFormSuccess(false), 2200);
-  };
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
+            {/* Pending registrations */}
+            <div className="card" style={{ padding:20 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+                <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15 }}>Pending approvals</div>
+                <button className="btn-outline-green" onClick={()=>setPage("registrations")} style={{ fontSize:11,padding:"4px 12px" }}>View all</button>
+              </div>
+              {pendingRegistrations.filter(r=>r.status==="Pending").slice(0,4).map((r,i)=>(
+                <div key={r.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<Math.min(3,pendingRegistrations.filter(x=>x.status==="Pending").length-1)?`1px solid ${C.border}`:"none" }}>
+                  <div style={{ width:34,height:34,borderRadius:8,background:roleBg[r.role],display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>{ROLES[r.role]?.icon}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{r.name}</div>
+                    <div style={{ fontSize:11,color:C.textSoft }}>{ROLES[r.role]?.label}{r.team!=="—"?` · ${r.team}`:""}</div>
+                  </div>
+                  <div style={{ display:"flex",gap:5 }}>
+                    <button onClick={()=>approveReg(r.id)} style={{ padding:"3px 8px",borderRadius:5,border:`1px solid ${C.green}`,background:"transparent",color:C.green,fontSize:11,cursor:"pointer",fontWeight:600 }}>✓</button>
+                    <button onClick={()=>rejectReg(r.id)} style={{ padding:"3px 8px",borderRadius:5,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:11,cursor:"pointer" }}>✕</button>
+                  </div>
+                </div>
+              ))}
+              {pendingRegistrations.filter(r=>r.status==="Pending").length===0 && (
+                <div style={{ textAlign:"center",padding:"20px",color:C.textSoft,fontSize:13 }}>✅ All caught up!</div>
+              )}
+            </div>
 
-  return (
-    <div className="fade-up">
-      <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:22 }}>
-        <button className="btn-ghost" onClick={onCancel} style={{ padding:"7px 14px",fontSize:13 }}>← Back</button>
-        <div>
-          <h2 style={{ fontFamily:"'Syne'",fontSize:22,fontWeight:800,color:C.text }}>Add Player Profile</h2>
-          <p style={{ fontSize:13,color:C.textSoft }}>Nairobi Rhinos RFC · Cannot be edited after submission</p>
-        </div>
-      </div>
-      {formSuccess && (
-        <div style={{ padding:"14px 18px",background:C.greenLight,border:`1px solid ${C.green}28`,borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:22 }}>✅</span>
-          <div><div style={{ fontSize:14,fontWeight:700,color:C.green }}>Player submitted!</div><div style={{ fontSize:12,color:C.textSoft }}>Awaiting review by Tournament Organizer.</div></div>
+            {/* Open disputes */}
+            <div className="card" style={{ padding:20 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+                <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15 }}>Open disputes</div>
+                <button className="btn-outline-green" onClick={()=>setPage("disputes")} style={{ fontSize:11,padding:"4px 12px" }}>View all</button>
+              </div>
+              {disputes.filter(d=>d.status==="Open").map((d,i,arr)=>(
+                <div key={d.id} onClick={()=>{setSelectedDispute(d);setPage("disputes");}}
+                  style={{ padding:"9px 0",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",cursor:"pointer" }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3 }}>
+                    <div style={{ fontSize:13,fontWeight:600,color:C.text,flex:1,marginRight:8 }}>{d.title}</div>
+                    <Badge label={d.severity} color={sevColor[d.severity]} bg={sevBg[d.severity]}/>
+                  </div>
+                  <div style={{ fontSize:11,color:C.textSoft }}>{d.against} · {d.created}</div>
+                </div>
+              ))}
+              {disputes.filter(d=>d.status==="Open").length===0 && (
+                <div style={{ textAlign:"center",padding:"20px",color:C.textSoft,fontSize:13 }}>✅ No open disputes.</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
-      {formError && <div style={{ padding:"10px 14px",background:C.redLight,border:`1px solid ${C.red}28`,borderRadius:8,marginBottom:14,fontSize:13,color:C.red }}>⚠️ {formError}</div>}
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:18 }}>
-        <div>
-          <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Player details</div>
-            <Field label="Full Name *"><Input placeholder="e.g. James Omondi Kamau" value={form.name} onChange={e=>setF("name",e.target.value)}/></Field>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-              <Field label="Date of Birth *"><Input type="date" value={form.dob} onChange={e=>setF("dob",e.target.value)}/></Field>
-              <Field label="Phone *"><Input type="tel" placeholder="+254 7XX XXX XXX" value={form.phone} onChange={e=>setF("phone",e.target.value)}/></Field>
-            </div>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-              <Field label="Jersey Number *"><Input type="number" min="1" max="99" placeholder="e.g. 10" value={form.jersey} onChange={e=>setF("jersey",e.target.value)}/></Field>
-              <Field label="Position *"><SelectField placeholder="— Select —" value={form.position} onChange={e=>setF("position",e.target.value)} options={POSITIONS.map(p=>({ value:p,label:p }))}/></Field>
-            </div>
-          </div>
-          <div className="card" style={{ padding:"20px 22px" }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Next of kin</div>
-            <Field label="Full Name *"><Input placeholder="e.g. Mary Kamau" value={form.kin_name} onChange={e=>setF("kin_name",e.target.value)}/></Field>
-            <Field label="Phone *"><Input type="tel" placeholder="+254 7XX XXX XXX" value={form.kin_phone} onChange={e=>setF("kin_phone",e.target.value)}/></Field>
-          </div>
-        </div>
-        <div>
-          <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:6 }}>Player photo</div>
-            <div style={{ fontSize:12,color:C.textSoft,marginBottom:14 }}>Clear face photo for facial recognition.</div>
-            <UploadBox label="Player face photo *" preview={form.photoPreview} icon="📸" onUpload={file=>handleFileUpload("photo","photoPreview",file)}/>
-          </div>
-          <div className="card" style={{ padding:"20px 22px" }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:6 }}>Kenyan ID documents</div>
-            <div style={{ fontSize:12,color:C.textSoft,marginBottom:14 }}>Both sides — must be clear and readable.</div>
-            <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-              <UploadBox label="ID Front *" preview={form.id_frontPreview} icon="🪪" onUpload={file=>handleFileUpload("id_front","id_frontPreview",file)}/>
-              <UploadBox label="ID Back *"  preview={form.id_backPreview}  icon="🪪" onUpload={file=>handleFileUpload("id_back","id_backPreview",file)}/>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div style={{ padding:"10px 14px",background:C.amberLight,borderRadius:8,border:`1px solid ${C.amber}28`,fontSize:12,color:C.amber,margin:"16px 0",lineHeight:1.6 }}>
-        ⚠️ Once submitted this profile cannot be edited. Ensure all details and photos are correct.
-      </div>
-      <div style={{ display:"flex",gap:10 }}>
-        <button className="btn-ghost" onClick={onCancel} style={{ flex:"0 0 120px" }}>Cancel</button>
-        <button className="btn-primary" onClick={handleSubmit} disabled={submitting} style={{ flex:1,fontSize:15 }}>
-          {submitting ? "Submitting..." : "Submit player profile →"}
-        </button>
-      </div>
-    </div>
+      {page==="registrations" && <RegistrationsPage/>}
+      {page==="users"         && <UsersPage/>}
+      {page==="disputes"      && <DisputesPage/>}
+      {page==="tournaments"   && <TournamentsAdminPage/>}
+      {page==="stats"         && <StatsPage/>}
+    </DashboardShell>
   );
 };
 
@@ -1358,7 +1609,7 @@ const TournamentOrganizerDashboard = ({ user, onLogout }) => {
   );
 };
 
-const TeamManagerDashboard = ({ user, onLogout }) => {
+const TeamManagerDashboard = ({ user, onLogout, notifications: externalNotifs = [] }) => {
   const [page, setPage] = useState("overview");
 
   // ── SHARED STATE ────────────────────────────────────────────────────────────
@@ -1787,7 +2038,7 @@ const TeamManagerDashboard = ({ user, onLogout }) => {
     { id:"tournaments",   label:"Tournaments",     icon:"🏆" },
     { id:"injuries",      label:"Injuries",        icon:"🏥", badge:"1" },
     { id:"cards",         label:"Cards & Flags",   icon:"🟥" },
-    { id:"notifications", label:"Notifications",   icon:"🔔", badge:"3" },
+    { id:"notifications", label:"Notifications",   icon:"🔔", badge:externalNotifs.length > 0 ? String(externalNotifs.filter(n=>!n.read).length) : "3" },
   ];
 
   return (
@@ -1826,15 +2077,22 @@ const TeamManagerDashboard = ({ user, onLogout }) => {
             </div>
             <div className="card" style={{ padding:20 }}>
               <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Notifications</div>
-              {[
-                { msg:"Red card — J. Kamau suspended 1 match",icon:"🟥",time:"2h ago" },
-                { msg:"Daniel Njoroge marked injured by medic", icon:"🏥",time:"4h ago" },
-                { msg:"Squad verified for Saturday",           icon:"✅",time:"1d ago" },
-              ].map((n,i)=>(
-                <div key={i} style={{ display:"flex",gap:10,padding:"8px 0",borderBottom:i<2?`1px solid ${C.border}`:"none" }}>
-                  <span style={{ fontSize:17,flexShrink:0 }}>{n.icon}</span>
+              {(externalNotifs.length > 0 ? externalNotifs.slice(0,4) : [
+                { msg:"Red card — J. Kamau suspended 1 match",type:"red_card",  time:"2h ago" },
+                { msg:"Daniel Njoroge marked injured by medic",type:"injury",    time:"4h ago" },
+                { msg:"Squad verified for Saturday",           type:"squad",     time:"1d ago" },
+              ]).map((n,i,arr)=>(
+                <div key={n.id||i} style={{ display:"flex",gap:10,padding:"8px 0",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none" }}>
+                  <span style={{ fontSize:17,flexShrink:0 }}>
+                    {n.type==="red_card"?"🟥":n.type==="yellow_card"?"🟨":n.type==="injury"?"🏥":"✅"}
+                  </span>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:12,color:C.text }}>{n.msg}</div>
+                    <div style={{ fontSize:12,color:C.text }}>
+                      {n.msg || (n.type==="red_card"?`Red card — ${n.player} · ${n.ban>0?`${n.ban}-match ban`:""}`
+                               :n.type==="yellow_card"?`Yellow card — ${n.player}`
+                               :n.type==="injury"?`${n.severity||""} injury — ${n.player} (${n.injury||""})`
+                               :n.msg)}
+                    </div>
                     <div style={{ fontSize:11,color:C.textDim }}>{n.time}</div>
                   </div>
                 </div>
@@ -2454,107 +2712,738 @@ const DataEntryDashboard = ({ user, onLogout, liveMatches, setLiveMatches }) => 
 };
 
 
-const MasterRefereeDashboard = ({ user, onLogout }) => {
+const MasterRefereeDashboard = ({ user, onLogout, onNotify }) => {
   const [page, setPage] = useState("overview");
-  const links = [
-    { id:"overview",label:"Overview",      icon:"📊" },
-    { id:"cards",   label:"Issue Cards",   icon:"🟥" },
-    { id:"reports", label:"Match Reports", icon:"📝" },
-    { id:"history", label:"Card History",  icon:"📋" },
+
+  // ── CARD RECORDS ───────────────────────────────────────────────────────────
+  const [cards, setCards] = useState([
+    { id:"c1", type:"Red",    player:"James Kamau",   jersey:1,  team:"Nairobi Rhinos RFC", match:"Nairobi Rhinos vs Kisumu Tigers", min:34, offence:"Dangerous tackle from behind",         ban:1, ban_status:"Pending organizer review", match_id:"m1", timestamp:"Mar 23 14:34" },
+    { id:"c2", type:"Yellow", player:"Collins Otieno",jersey:10, team:"Kisumu Tigers RFC",  match:"Nairobi Rhinos vs Kisumu Tigers", min:18, offence:"Repeated infringement at the ruck",    ban:0, ban_status:"Warning",                 match_id:"m1", timestamp:"Mar 23 14:18" },
+    { id:"c3", type:"Yellow", player:"Brian Waweru",  jersey:4,  team:"Nairobi Rhinos RFC", match:"Nairobi Rhinos vs Kisumu Tigers", min:52, offence:"Late tackle",                          ban:0, ban_status:"Warning",                 match_id:"m1", timestamp:"Mar 23 15:12" },
+    { id:"c4", type:"Citing", player:"Mark Waweru",   jersey:8,  team:"Kisumu Tigers RFC",  match:"Nairobi Rhinos vs Kisumu Tigers", min:80, offence:"Alleged biting — post-match report",   ban:0, ban_status:"Under investigation",     match_id:"m1", timestamp:"Mar 23 17:00" },
+  ]);
+
+  // ── MATCHES ────────────────────────────────────────────────────────────────
+  const matches = [
+    { id:"m1", label:"Nairobi Rhinos vs Kisumu Tigers",   status:"Live",      home_squad:[
+        { jersey:1,name:"James Kamau" },{ jersey:4,name:"Brian Waweru" },{ jersey:5,name:"Peter Omondi" },
+        { jersey:8,name:"Daniel Njoroge" },{ jersey:9,name:"Kevin Mutua" },{ jersey:10,name:"Grace Wanjiku" },
+        { jersey:11,name:"Samuel Mutua" },{ jersey:12,name:"David Njoroge" },{ jersey:13,name:"Eric Ochieng" },
+      ],
+      away_squad:[
+        { jersey:1,name:"Wycliffe Oduya" },{ jersey:8,name:"Mark Waweru" },{ jersey:10,name:"Collins Otieno" },
+        { jersey:11,name:"George Kamau" },{ jersey:12,name:"Dennis Mutua" },{ jersey:13,name:"Victor Oduya" },
+      ],
+    },
+    { id:"m2", label:"Mombasa Lions vs Thika Panthers",   status:"Scheduled", home_squad:[], away_squad:[] },
   ];
+
+  // ── CARD FORM STATE ────────────────────────────────────────────────────────
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [cardForm, setCardForm] = useState({ type:"Yellow", match_id:"m1", team:"home", search:"", selectedPlayer:null, offence:"", ban:1 });
+  const [cardError, setCardError]       = useState("");
+  const [cardSuccess, setCardSuccess]   = useState(false);
+  const [submitting, setSubmitting]     = useState(false);
+  const setC = (k,v) => setCardForm(f => ({ ...f,[k]:v }));
+
+  // Yellow card tracking for auto-red
+  const yellowCount = (playerId, matchId) =>
+    cards.filter(c => c.player === playerId && c.match_id === matchId && c.type === "Yellow").length;
+
+  const CARD_TYPES = [
+    { type:"Yellow", icon:"🟨", color:"#B8860B", bg:"#FDF6E3", desc:"Warning — player stays on" },
+    { type:"Red",    icon:"🟥", color:C.red,     bg:C.redLight, desc:"Immediate suspension" },
+    { type:"Sin bin",icon:"⏱️", color:C.teal,    bg:C.tealLight,desc:"10-min temporary suspension" },
+    { type:"Citing", icon:"📋", color:C.purple,  bg:C.purpleLight,desc:"Post-match report" },
+  ];
+
+  const getSquad = (matchId, team) => {
+    const m = matches.find(x => x.id === matchId);
+    if (!m) return [];
+    return team === "home" ? m.home_squad : m.away_squad;
+  };
+
+  const handleIssueCard = async () => {
+    setCardError("");
+    if (!cardForm.match_id)     { setCardError("Select a match.");           return; }
+    if (!cardForm.selectedPlayer && !cardForm.search) { setCardError("Select a player."); return; }
+    if (!cardForm.offence.trim()){ setCardError("Describe the offence."); return; }
+
+    setSubmitting(true);
+    await new Promise(r => setTimeout(r, 900));
+
+    const player = cardForm.selectedPlayer;
+    const playerName   = player?.name  || cardForm.search;
+    const playerJersey = player?.jersey || "";
+    const matchLabel   = matches.find(m => m.id === cardForm.match_id)?.label || "";
+
+    // Auto-upgrade 2nd yellow to red
+    let finalType = cardForm.type;
+    if (cardForm.type === "Yellow") {
+      const yellows = cards.filter(c =>
+        c.player === playerName && c.match_id === cardForm.match_id && c.type === "Yellow"
+      ).length;
+      if (yellows >= 1) finalType = "Red"; // 2nd yellow = red
+    }
+
+    const newCard = {
+      id:         `c${Date.now()}`,
+      type:       finalType,
+      player:     playerName,
+      jersey:     playerJersey,
+      team:       cardForm.team === "home"
+                    ? matches.find(m=>m.id===cardForm.match_id)?.label.split(" vs ")[0]+" RFC"
+                    : matches.find(m=>m.id===cardForm.match_id)?.label.split(" vs ")[1]+" RFC",
+      match:      matchLabel,
+      match_id:   cardForm.match_id,
+      min:        0,
+      offence:    cardForm.offence,
+      ban:        finalType === "Red" ? cardForm.ban : 0,
+      ban_status: finalType === "Red" ? "Pending organizer review" : "Warning",
+      timestamp:  new Date().toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}),
+      auto_red:   finalType === "Red" && cardForm.type === "Yellow",
+    };
+
+    setCards(prev => [newCard, ...prev]);
+
+    // Notify Team Manager
+    if (onNotify) {
+      onNotify({
+        type: finalType === "Red" ? "red_card" : finalType === "Yellow" ? "yellow_card" : "card",
+        player: playerName,
+        team: newCard.team,
+        match: matchLabel,
+        card: finalType,
+        auto_red: newCard.auto_red,
+        ban: newCard.ban,
+        time: newCard.timestamp,
+      });
+    }
+
+    setSubmitting(false);
+    setCardSuccess(true);
+    setCardForm({ type:"Yellow", match_id:"m1", team:"home", search:"", selectedPlayer:null, offence:"", ban:1 });
+    setTimeout(() => { setCardSuccess(false); setShowCardForm(false); }, 2200);
+  };
+
+  const typeColor = { Yellow:"#B8860B", Red:C.red, "Sin bin":C.teal, Citing:C.purple };
+  const typeBg    = { Yellow:"#FDF6E3", Red:C.redLight, "Sin bin":C.tealLight, Citing:C.purpleLight };
+
+  // ── ISSUE CARD FORM ────────────────────────────────────────────────────────
+  const IssueCardForm = () => {
+    const squad = getSquad(cardForm.match_id, cardForm.team);
+    const filtered = squad.filter(p =>
+      !cardForm.search ||
+      p.name.toLowerCase().includes(cardForm.search.toLowerCase()) ||
+      String(p.jersey).includes(cardForm.search)
+    );
+    const matchLabel = matches.find(m=>m.id===cardForm.match_id)?.label || "";
+    const yellows = cards.filter(c => c.player === (cardForm.selectedPlayer?.name||cardForm.search) && c.match_id === cardForm.match_id && c.type === "Yellow").length;
+    const willAutoRed = cardForm.type === "Yellow" && yellows >= 1;
+
+    return (
+      <div className="fade-up">
+        <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:22 }}>
+          <button className="btn-ghost" onClick={() => { setShowCardForm(false); setCardError(""); }} style={{ padding:"7px 14px",fontSize:13 }}>← Back</button>
+          <div>
+            <h2 style={{ fontFamily:"'Syne'",fontSize:22,fontWeight:800,color:C.text }}>Issue Card</h2>
+            <p style={{ fontSize:13,color:C.textSoft }}>Record a disciplinary card or incident</p>
+          </div>
+        </div>
+
+        {cardSuccess && (
+          <div style={{ padding:"14px 18px",background:C.greenLight,border:`1px solid ${C.green}28`,borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10 }}>
+            <span style={{ fontSize:22 }}>✅</span>
+            <div><div style={{ fontSize:14,fontWeight:700,color:C.green }}>Card issued successfully!</div><div style={{ fontSize:12,color:C.textSoft }}>Team Manager has been notified.</div></div>
+          </div>
+        )}
+        {cardError && <div style={{ padding:"10px 14px",background:C.redLight,border:`1px solid ${C.red}28`,borderRadius:8,marginBottom:14,fontSize:13,color:C.red }}>⚠️ {cardError}</div>}
+
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:18 }}>
+          {/* Left */}
+          <div>
+            <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
+              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:16 }}>Card type</div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6 }}>
+                {CARD_TYPES.map(ct => (
+                  <button key={ct.type} onClick={() => setC("type",ct.type)}
+                    style={{ padding:"12px 10px",borderRadius:8,border:`1.5px solid ${cardForm.type===ct.type?ct.color:C.border}`,background:cardForm.type===ct.type?ct.bg:"transparent",cursor:"pointer",textAlign:"center",transition:"all 0.15s" }}>
+                    <div style={{ fontSize:22,marginBottom:4 }}>{ct.icon}</div>
+                    <div style={{ fontSize:12,fontWeight:700,color:cardForm.type===ct.type?ct.color:C.textMid }}>{ct.type}</div>
+                    <div style={{ fontSize:10,color:C.textSoft,marginTop:2 }}>{ct.desc}</div>
+                  </button>
+                ))}
+              </div>
+              {willAutoRed && (
+                <div style={{ padding:"8px 12px",background:C.redLight,border:`1px solid ${C.red}28`,borderRadius:7,fontSize:12,color:C.red,fontWeight:600 }}>
+                  ⚠️ This player already has a yellow card this match — issuing will auto-upgrade to a RED card.
+                </div>
+              )}
+            </div>
+
+            <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
+              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:14 }}>Match & team</div>
+              <Field label="Match *">
+                <SelectField value={cardForm.match_id} onChange={e => setC("match_id",e.target.value)}
+                  options={matches.map(m=>({ value:m.id, label:m.label }))}/>
+              </Field>
+              <Field label="Team *">
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+                  {["home","away"].map(t => {
+                    const lbl = t==="home" ? matchLabel.split(" vs ")[0] : matchLabel.split(" vs ")[1];
+                    return (
+                      <button key={t} onClick={()=>setC("team",t)}
+                        style={{ padding:"8px",borderRadius:7,border:`1.5px solid ${cardForm.team===t?C.green:C.border}`,background:cardForm.team===t?C.greenLight:"transparent",cursor:"pointer",fontSize:12,fontWeight:600,color:cardForm.team===t?C.green:C.textMid }}>
+                        {lbl||t}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+            </div>
+
+            {(cardForm.type === "Red" || willAutoRed) && (
+              <div className="card" style={{ padding:"20px 22px" }}>
+                <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:14 }}>Suspension</div>
+                <Field label="Match ban (games)">
+                  <Input type="number" min="1" max="12" value={cardForm.ban} onChange={e=>setC("ban",Number(e.target.value))}/>
+                </Field>
+                <div style={{ fontSize:11,color:C.textSoft }}>Organizer will review and confirm the ban length.</div>
+              </div>
+            )}
+          </div>
+
+          {/* Right */}
+          <div>
+            <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
+              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:14 }}>Player</div>
+              <Field label="Search by jersey # or name *">
+                <Input placeholder="e.g. 10 or James Kamau" value={cardForm.search}
+                  onChange={e => setC("search",e.target.value) || setC("selectedPlayer",null)} autoFocus/>
+              </Field>
+              {cardForm.search && (
+                <div style={{ border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",marginTop:-8,maxHeight:200,overflowY:"auto" }}>
+                  {filtered.length === 0 ? (
+                    <div style={{ padding:"10px 14px",fontSize:12,color:C.textSoft }}>No players found. Card will be recorded with typed name.</div>
+                  ) : filtered.map((p,i) => {
+                    const py = cards.filter(c=>c.player===p.name&&c.match_id===cardForm.match_id&&c.type==="Yellow").length;
+                    return (
+                      <div key={i} onClick={() => setC("selectedPlayer",p) || setC("search",`#${p.jersey} ${p.name}`)}
+                        style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 14px",cursor:"pointer",background:cardForm.selectedPlayer?.jersey===p.jersey?C.greenLight:"transparent",borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none" }}
+                        onMouseEnter={e=>e.currentTarget.style.background=C.greenLight}
+                        onMouseLeave={e=>e.currentTarget.style.background=cardForm.selectedPlayer?.jersey===p.jersey?C.greenLight:"transparent"}>
+                        <div style={{ width:28,height:28,borderRadius:6,background:C.greenLight,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono'",fontSize:11,fontWeight:700,color:C.green }}>{p.jersey}</div>
+                        <span style={{ flex:1,fontSize:13,fontWeight:600,color:C.text }}>{p.name}</span>
+                        {py>0 && <span style={{ fontSize:10,fontWeight:700,color:"#B8860B",background:"#FDF6E3",padding:"2px 6px",borderRadius:4 }}>🟨 ×{py}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="card" style={{ padding:"20px 22px" }}>
+              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:14 }}>Offence details</div>
+              <Field label="Offence description *">
+                <textarea className="input-field" placeholder="Describe what happened e.g. dangerous tackle from behind at ruck, player was warned but persisted..."
+                  rows={5} value={cardForm.offence} onChange={e=>setC("offence",e.target.value)}
+                  style={{ resize:"vertical" }}
+                />
+              </Field>
+            </div>
+
+            {/* Preview */}
+            {(cardForm.selectedPlayer||cardForm.search) && cardForm.offence && (
+              <div style={{ padding:"12px 14px",background:typeBg[willAutoRed?"Red":cardForm.type]||C.surfaceAlt,border:`1px solid ${typeColor[willAutoRed?"Red":cardForm.type]}28`,borderRadius:8,marginTop:14,fontSize:13 }}>
+                <span style={{ fontSize:16,marginRight:8 }}>{CARD_TYPES.find(t=>t.type===(willAutoRed?"Red":cardForm.type))?.icon}</span>
+                <strong style={{ color:typeColor[willAutoRed?"Red":cardForm.type] }}>{willAutoRed?"Red (auto)":cardForm.type} card</strong>
+                {" · "}
+                {cardForm.selectedPlayer?`#${cardForm.selectedPlayer.jersey} ${cardForm.selectedPlayer.name}`:cardForm.search}
+                {(cardForm.type==="Red"||(willAutoRed)) && cardForm.ban > 0 && ` · ${cardForm.ban}-match ban`}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display:"flex",gap:10,marginTop:18 }}>
+          <button className="btn-ghost" onClick={() => { setShowCardForm(false); setCardError(""); }} style={{ flex:"0 0 120px" }}>Cancel</button>
+          <button className="btn-primary" onClick={handleIssueCard} disabled={submitting}
+            style={{ flex:1,fontSize:15,background:typeColor[willAutoRed?"Red":cardForm.type]||C.green }}>
+            {submitting ? "Issuing..." : `Issue ${willAutoRed?"Red (auto)":cardForm.type} card →`}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ── CARD HISTORY PAGE ──────────────────────────────────────────────────────
+  const CardHistoryPage = () => (
+    <div className="fade-up">
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
+        <div>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Card History</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>{cards.length} records this tournament</p>
+        </div>
+        <button className="btn-primary" onClick={() => { setShowCardForm(true); setCardError(""); }} style={{ fontSize:13,background:C.red }}>🟥 Issue card</button>
+      </div>
+
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:18 }}>
+        {[
+          { label:"Yellow cards", value:cards.filter(c=>c.type==="Yellow").length,  color:"#B8860B", icon:"🟨" },
+          { label:"Red cards",    value:cards.filter(c=>c.type==="Red").length,     color:C.red,     icon:"🟥" },
+          { label:"Sin bins",     value:cards.filter(c=>c.type==="Sin bin").length, color:C.teal,    icon:"⏱️" },
+          { label:"Citings",      value:cards.filter(c=>c.type==="Citing").length,  color:C.purple,  icon:"📋" },
+        ].map((s,i) => (
+          <div key={i} className="card" style={{ padding:"14px 18px",display:"flex",alignItems:"center",gap:12 }}>
+            <div style={{ width:36,height:36,borderRadius:8,background:s.color+"14",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18 }}>{s.icon}</div>
+            <div>
+              <div style={{ fontSize:11,color:C.textSoft,fontFamily:"'JetBrains Mono'",textTransform:"uppercase",letterSpacing:"0.05em" }}>{s.label}</div>
+              <div style={{ fontFamily:"'Syne'",fontWeight:800,fontSize:22,color:s.color }}>{s.value}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ overflow:"hidden" }}>
+        <div style={{ display:"grid",gridTemplateColumns:"60px 1fr 1fr 80px 100px 110px",padding:"0 16px",height:38,alignItems:"center",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+          {["Card","Player","Match","Min","Ban","Time"].map(h=>(
+            <span key={h} style={{ fontSize:10,color:C.textSoft,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'JetBrains Mono'" }}>{h}</span>
+          ))}
+        </div>
+        {cards.map((c,i) => (
+          <div key={c.id} style={{ display:"grid",gridTemplateColumns:"60px 1fr 1fr 80px 100px 110px",alignItems:"center",padding:"0 16px",minHeight:56,borderBottom:`1px solid ${C.border}`,background:i%2===0?"transparent":C.surfaceAlt }}>
+            <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+              <span style={{ fontSize:18 }}>{CARD_TYPES.find(t=>t.type===c.type)?.icon||"📋"}</span>
+              {c.auto_red && <span style={{ fontSize:9,fontWeight:700,color:C.red,background:C.redLight,padding:"1px 4px",borderRadius:3 }}>2Y</span>}
+            </div>
+            <div>
+              <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{c.jersey?`#${c.jersey} `:""}{c.player}</div>
+              <div style={{ fontSize:11,color:C.textSoft,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180 }}>{c.team}</div>
+            </div>
+            <div style={{ fontSize:12,color:C.textMid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{c.match}</div>
+            <span style={{ fontSize:12,color:C.textSoft,fontFamily:"'JetBrains Mono'" }}>{c.min}'</span>
+            <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:c.type==="Red"?C.redLight:C.surfaceAlt,color:c.type==="Red"?C.red:C.textSoft }}>
+              {c.ban>0?`${c.ban}-match ban`:"Warning"}
+            </span>
+            <span style={{ fontSize:11,color:C.textDim,fontFamily:"'JetBrains Mono'" }}>{c.timestamp}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const links = [
+    { id:"overview", label:"Overview",      icon:"📊" },
+    { id:"cards",    label:"Issue Card",    icon:"🟥" },
+    { id:"history",  label:"Card History",  icon:"📋" },
+    { id:"reports",  label:"Match Reports", icon:"📝" },
+  ];
+
   return (
-    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={setPage}>
-      {page==="overview" ? (
+    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={p=>{setPage(p);setShowCardForm(false);}}>
+      {page==="overview" && (
         <div className="fade-up">
-          <div style={{ marginBottom:22 }}>
+          <div style={{ marginBottom:20 }}>
             <h1 style={{ fontFamily:"'Syne'",fontSize:26,fontWeight:800,color:C.text }}>Referee Panel</h1>
             <p style={{ fontSize:14,color:C.textSoft }}>{user.name}</p>
           </div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:18 }}>
-            <StatCard icon="🟨" label="Yellow Cards" value="18" color={C.gold}/>
-            <StatCard icon="🟥" label="Red Cards"    value="4"  color={C.red}/>
-            <StatCard icon="🚫" label="Suspensions"  value="3"  color={C.amber}/>
-            <StatCard icon="📝" label="Reports"      value="12" color={C.blue}/>
+            <StatCard icon="🟨" label="Yellow Cards" value={cards.filter(c=>c.type==="Yellow").length} color="#B8860B"/>
+            <StatCard icon="🟥" label="Red Cards"    value={cards.filter(c=>c.type==="Red").length}    color={C.red}/>
+            <StatCard icon="⏱️" label="Sin Bins"     value={cards.filter(c=>c.type==="Sin bin").length} color={C.teal}/>
+            <StatCard icon="📋" label="Citings"      value={cards.filter(c=>c.type==="Citing").length}  color={C.purple}/>
           </div>
-          <div className="card" style={{ padding:18,marginBottom:14,border:`1.5px solid ${C.red+"40"}`,background:C.redLight }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:13,color:C.red,marginBottom:7 }}>Current match — LIVE</div>
-            <div style={{ fontFamily:"'Syne'",fontSize:16,fontWeight:800,color:C.text,marginBottom:10 }}>Nairobi Rhinos vs Kisumu Tigers</div>
-            <button className="btn-primary" onClick={()=>setPage("cards")} style={{ background:C.red,fontSize:13 }}>🟥 Issue card →</button>
+
+          {/* Live match panel */}
+          <div className="card" style={{ padding:"18px 22px",marginBottom:14,borderLeft:`3px solid ${C.red}` }}>
+            <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
+              <span style={{ width:8,height:8,borderRadius:"50%",background:C.red,display:"inline-block",animation:"pulse 1.5s infinite" }}/>
+              <span style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.red }}>LIVE — Nairobi Rhinos vs Kisumu Tigers</span>
+            </div>
+            <div style={{ display:"flex",gap:10 }}>
+              <button className="btn-primary" onClick={()=>{setShowCardForm(true);setPage("cards");}} style={{ background:C.red,fontSize:13 }}>🟥 Issue card</button>
+              <button className="btn-ghost" onClick={()=>setPage("history")} style={{ fontSize:13 }}>View card history</button>
+            </div>
           </div>
+
+          {/* Recent cards */}
           <div className="card" style={{ padding:20 }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Recent cards issued</div>
-            {[
-              { player:"James Kamau",  team:"Nairobi Rhinos",card:"Red",   reason:"Dangerous tackle",     time:"58'" },
-              { player:"Brian Waweru", team:"Kisumu Tigers", card:"Yellow",reason:"Repeated infringement", time:"34'" },
-              { player:"Ali Hassan",   team:"Mombasa Lions", card:"Yellow",reason:"Obstruction",           time:"22'" },
-            ].map((c,i)=>(
-              <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<2?`1px solid ${C.border}`:"none" }}>
-                <span style={{ fontSize:20,flexShrink:0 }}>{c.card==="Red"?"🟥":"🟨"}</span>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Recent cards</div>
+            {cards.slice(0,4).map((c,i) => (
+              <div key={c.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:i<3?`1px solid ${C.border}`:"none" }}>
+                <span style={{ fontSize:20,flexShrink:0 }}>{CARD_TYPES.find(t=>t.type===c.type)?.icon||"📋"}</span>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{c.player} · {c.team}</div>
-                  <div style={{ fontSize:11,color:C.textSoft }}>{c.reason} · {c.time}</div>
+                  <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{c.jersey?`#${c.jersey} `:""}{c.player} · {c.team}</div>
+                  <div style={{ fontSize:11,color:C.textSoft,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{c.offence}</div>
                 </div>
-                <Badge label={c.card+" Card"} color={c.card==="Red"?C.red:C.gold}/>
+                <div style={{ textAlign:"right",flexShrink:0 }}>
+                  <span style={{ padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:typeBg[c.type],color:typeColor[c.type] }}>{c.type}</span>
+                  <div style={{ fontSize:10,color:C.textDim,marginTop:3,fontFamily:"'JetBrains Mono'" }}>{c.timestamp}</div>
+                </div>
               </div>
             ))}
           </div>
         </div>
-      ) : <ComingSoon icon={links.find(l=>l.id===page)?.icon} label={links.find(l=>l.id===page)?.label}/>}
+      )}
+      {page==="cards"   && (showCardForm ? <IssueCardForm/> : (
+        <div className="fade-up" style={{ textAlign:"center",padding:"60px 20px" }}>
+          <div style={{ fontSize:56,marginBottom:16 }}>🟥</div>
+          <div style={{ fontFamily:"'Syne'",fontSize:20,fontWeight:700,color:C.text,marginBottom:8 }}>Issue a Card</div>
+          <p style={{ fontSize:14,color:C.textSoft,marginBottom:20 }}>Select the match, player and card type</p>
+          <button className="btn-primary" onClick={()=>setShowCardForm(true)} style={{ background:C.red }}>🟥 Issue card now</button>
+        </div>
+      ))}
+      {page==="history" && <CardHistoryPage/>}
+      {page==="reports" && <ComingSoon icon="📝" label="Match Reports"/>}
     </DashboardShell>
   );
 };
 
-const MedicDashboard = ({ user, onLogout }) => {
+const MedicDashboard = ({ user, onLogout, onNotify }) => {
   const [page, setPage] = useState("overview");
-  const links = [
-    { id:"overview", label:"Overview",       icon:"📊" },
-    { id:"injuries", label:"Log Injury",     icon:"🏥" },
-    { id:"teams",    label:"Team Health",    icon:"👥" },
-    { id:"history",  label:"Injury History", icon:"📋" },
+
+  // ── INJURY RECORDS ─────────────────────────────────────────────────────────
+  const [injuries, setInjuries] = useState([
+    { id:"i1", player:"Daniel Njoroge", jersey:13, team:"Nairobi Rhinos RFC", type:"Hamstring strain",   severity:"Moderate", notes:"Player felt pain in left hamstring after tackle in 34th min. Can walk but unable to sprint.", status:"Active",   reported:"Mar 23 14:45", match:"Nairobi Rhinos vs Kisumu Tigers" },
+    { id:"i2", player:"Collins Otieno", jersey:10, team:"Kisumu Tigers RFC",  type:"Ankle sprain",       severity:"Minor",    notes:"Rolled ankle during ruck. Strapped and returned to play.",                                   status:"Cleared",  reported:"Mar 23 15:20", match:"Nairobi Rhinos vs Kisumu Tigers" },
+    { id:"i3", player:"Mark Waweru",    jersey:8,  team:"Kisumu Tigers RFC",  type:"Concussion",         severity:"Severe",   notes:"Head collision at 52nd min. Showed concussion symptoms. Withdrawn immediately. HIA required.", status:"Active",   reported:"Mar 23 15:52", match:"Nairobi Rhinos vs Kisumu Tigers" },
+  ]);
+
+  const [showInjuryForm, setShowInjuryForm] = useState(false);
+  const [injForm, setInjForm] = useState({ team:"", player:"", jersey:"", match:"Nairobi Rhinos vs Kisumu Tigers", type:"", severity:"Minor", notes:"" });
+  const [injError, setInjError]   = useState("");
+  const [injSuccess, setInjSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const setI = (k,v) => setInjForm(f=>({ ...f,[k]:v }));
+
+  const SEVERITIES = [
+    { level:"Minor",   color:C.green,  bg:C.greenLight, desc:"Can play with treatment"         },
+    { level:"Moderate",color:C.amber,  bg:C.amberLight, desc:"Needs rest, available next match" },
+    { level:"Severe",  color:C.red,    bg:C.redLight,   desc:"Out for multiple matches"         },
+    { level:"Unknown", color:C.purple, bg:C.purpleLight,desc:"Pending full assessment"          },
   ];
+
+  const teams = [
+    { name:"Nairobi Rhinos RFC", squad:[
+        { jersey:1,name:"James Kamau" },{ jersey:4,name:"Brian Waweru" },
+        { jersey:5,name:"Peter Omondi" },{ jersey:8,name:"Daniel Njoroge" },
+        { jersey:13,name:"Eric Ochieng" },{ jersey:15,name:"Tom Baraka" },
+    ]},
+    { name:"Kisumu Tigers RFC", squad:[
+        { jersey:1,name:"Wycliffe Oduya" },{ jersey:8,name:"Mark Waweru" },
+        { jersey:10,name:"Collins Otieno" },{ jersey:13,name:"Victor Oduya" },
+    ]},
+    { name:"Mombasa Lions RFC", squad:[] },
+  ];
+
+  const teamSquad = teams.find(t=>t.name===injForm.team)?.squad||[];
+
+  const handleLogInjury = async () => {
+    setInjError("");
+    if (!injForm.team)    { setInjError("Select a team.");               return; }
+    if (!injForm.player)  { setInjError("Enter the player name.");       return; }
+    if (!injForm.type.trim()) { setInjError("Describe the injury type."); return; }
+    if (!injForm.notes.trim()) { setInjError("Add clinical notes.");     return; }
+
+    setSubmitting(true);
+    await new Promise(r=>setTimeout(r,1000));
+
+    const newInj = {
+      id:       `i${Date.now()}`,
+      player:   injForm.player,
+      jersey:   injForm.jersey,
+      team:     injForm.team,
+      type:     injForm.type,
+      severity: injForm.severity,
+      notes:    injForm.notes,
+      match:    injForm.match,
+      status:   "Active",
+      reported: new Date().toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}),
+    };
+
+    setInjuries(prev=>[newInj,...prev]);
+
+    // Notify Team Manager
+    if (onNotify) {
+      onNotify({
+        type:     "injury",
+        player:   injForm.player,
+        team:     injForm.team,
+        injury:   injForm.type,
+        severity: injForm.severity,
+        time:     newInj.reported,
+      });
+    }
+
+    setSubmitting(false);
+    setInjSuccess(true);
+    setInjForm({ team:"",player:"",jersey:"",match:"Nairobi Rhinos vs Kisumu Tigers",type:"",severity:"Minor",notes:"" });
+    setTimeout(()=>{ setInjSuccess(false); setShowInjuryForm(false); },2200);
+  };
+
+  const handleClear = (injId) => {
+    setInjuries(prev=>prev.map(inj=>inj.id===injId?{...inj,status:"Cleared"}:inj));
+  };
+
+  const sevColor = { Minor:C.green, Moderate:C.amber, Severe:C.red, Unknown:C.purple };
+  const sevBg    = { Minor:C.greenLight, Moderate:C.amberLight, Severe:C.redLight, Unknown:C.purpleLight };
+
+  // ── LOG INJURY FORM ────────────────────────────────────────────────────────
+  const LogInjuryForm = () => (
+    <div className="fade-up">
+      <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:22 }}>
+        <button className="btn-ghost" onClick={()=>{ setShowInjuryForm(false); setInjError(""); }} style={{ padding:"7px 14px",fontSize:13 }}>← Back</button>
+        <div>
+          <h2 style={{ fontFamily:"'Syne'",fontSize:22,fontWeight:800,color:C.text }}>Log Injury</h2>
+          <p style={{ fontSize:13,color:C.textSoft }}>Record a player injury — Team Manager will be notified instantly</p>
+        </div>
+      </div>
+
+      {injSuccess && (
+        <div style={{ padding:"14px 18px",background:C.greenLight,border:`1px solid ${C.green}28`,borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:22 }}>✅</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:C.green }}>Injury logged!</div><div style={{ fontSize:12,color:C.textSoft }}>Team Manager notified instantly.</div></div>
+        </div>
+      )}
+      {injError && <div style={{ padding:"10px 14px",background:C.redLight,border:`1px solid ${C.red}28`,borderRadius:8,marginBottom:14,fontSize:13,color:C.red }}>⚠️ {injError}</div>}
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:18 }}>
+        {/* Left */}
+        <div>
+          <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:14 }}>Player & team</div>
+            <Field label="Team *">
+              <SelectField placeholder="— Select team —" value={injForm.team} onChange={e=>{ setI("team",e.target.value); setI("player",""); setI("jersey",""); }}
+                options={teams.map(t=>({ value:t.name,label:t.name }))}/>
+            </Field>
+            {injForm.team && teamSquad.length > 0 && (
+              <Field label="Select player">
+                <SelectField placeholder="— Pick from squad —" value={injForm.player}
+                  onChange={e=>{
+                    const p = teamSquad.find(x=>x.name===e.target.value);
+                    setI("player",e.target.value);
+                    setI("jersey",p?.jersey||"");
+                  }}
+                  options={teamSquad.map(p=>({ value:p.name,label:`#${p.jersey} ${p.name}` }))}/>
+              </Field>
+            )}
+            <Field label={injForm.team&&teamSquad.length>0?"Or type player name manually":"Player name *"}>
+              <Input placeholder="Player name" value={injForm.player} onChange={e=>setI("player",e.target.value)}/>
+            </Field>
+            {!injForm.jersey && (
+              <Field label="Jersey number">
+                <Input type="number" placeholder="e.g. 13" value={injForm.jersey} onChange={e=>setI("jersey",e.target.value)}/>
+              </Field>
+            )}
+          </div>
+
+          <div className="card" style={{ padding:"20px 22px" }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:14 }}>Severity</div>
+            <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+              {SEVERITIES.map(s => (
+                <button key={s.level} onClick={()=>setI("severity",s.level)}
+                  style={{ padding:"10px 14px",borderRadius:8,border:`1.5px solid ${injForm.severity===s.level?s.color:C.border}`,background:injForm.severity===s.level?s.bg:"transparent",cursor:"pointer",textAlign:"left",transition:"all 0.15s",display:"flex",alignItems:"center",gap:12 }}>
+                  <div style={{ width:12,height:12,borderRadius:"50%",background:s.color,flexShrink:0 }}/>
+                  <div>
+                    <div style={{ fontSize:13,fontWeight:600,color:injForm.severity===s.level?s.color:C.textMid }}>{s.level}</div>
+                    <div style={{ fontSize:11,color:C.textSoft }}>{s.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right */}
+        <div>
+          <div className="card" style={{ padding:"20px 22px",marginBottom:14 }}>
+            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:14 }}>Injury details</div>
+            <Field label="Injury type *">
+              <Input placeholder="e.g. Hamstring strain, Ankle sprain, Concussion..." value={injForm.type} onChange={e=>setI("type",e.target.value)} autoFocus/>
+            </Field>
+            <Field label="Clinical notes *">
+              <textarea className="input-field" placeholder="Describe the injury in detail — mechanism, symptoms, treatment given, whether player continued..."
+                rows={7} value={injForm.notes} onChange={e=>setI("notes",e.target.value)} style={{ resize:"vertical" }}/>
+            </Field>
+          </div>
+
+          {/* Preview */}
+          {injForm.player && injForm.type && (
+            <div style={{ padding:"12px 14px",background:sevBg[injForm.severity],border:`1px solid ${sevColor[injForm.severity]}28`,borderRadius:8,fontSize:13 }}>
+              <div style={{ width:10,height:10,borderRadius:"50%",background:sevColor[injForm.severity],display:"inline-block",marginRight:8 }}/>
+              <strong style={{ color:sevColor[injForm.severity] }}>{injForm.severity}</strong>{" "}
+              injury — <strong>{injForm.player}{injForm.jersey?` (#${injForm.jersey})`:""}</strong> · {injForm.type}
+              <div style={{ fontSize:11,color:C.textSoft,marginTop:6 }}>🔔 Team Manager will be notified instantly</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display:"flex",gap:10,marginTop:18 }}>
+        <button className="btn-ghost" onClick={()=>{ setShowInjuryForm(false); setInjError(""); }} style={{ flex:"0 0 120px" }}>Cancel</button>
+        <button className="btn-primary" onClick={handleLogInjury} disabled={submitting} style={{ flex:1,fontSize:15 }}>
+          {submitting ? "Logging..." : "Log injury →"}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── INJURY LIST ────────────────────────────────────────────────────────────
+  const InjuryListPage = () => (
+    <div className="fade-up">
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
+        <div>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Injury Log</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>{injuries.filter(i=>i.status==="Active").length} active · {injuries.filter(i=>i.status==="Cleared").length} cleared</p>
+        </div>
+        <button className="btn-primary" onClick={()=>{ setShowInjuryForm(true); setInjError(""); }} style={{ fontSize:13 }}>+ Log Injury</button>
+      </div>
+
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:18 }}>
+        {SEVERITIES.map(s => (
+          <div key={s.level} className="card" style={{ padding:"12px 16px",display:"flex",alignItems:"center",gap:10 }}>
+            <div style={{ width:10,height:10,borderRadius:"50%",background:s.color,flexShrink:0 }}/>
+            <div>
+              <div style={{ fontSize:11,color:C.textSoft,fontFamily:"'JetBrains Mono'",textTransform:"uppercase",letterSpacing:"0.05em" }}>{s.level}</div>
+              <div style={{ fontFamily:"'Syne'",fontWeight:800,fontSize:20,color:s.color }}>
+                {injuries.filter(i=>i.severity===s.level&&i.status==="Active").length}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+        {injuries.map((inj,i) => (
+          <div key={inj.id} className="card" style={{ padding:"16px 20px",borderLeft:`3px solid ${inj.status==="Cleared"?C.green:sevColor[inj.severity]}` }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+                <div style={{ width:40,height:40,borderRadius:9,background:inj.status==="Cleared"?C.greenLight:sevBg[inj.severity],display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0 }}>🏥</div>
+                <div>
+                  <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,color:C.text }}>{inj.jersey?`#${inj.jersey} `:""}{inj.player}</div>
+                  <div style={{ fontSize:12,color:C.textSoft }}>{inj.team}</div>
+                </div>
+              </div>
+              <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                <span style={{ padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:inj.status==="Cleared"?C.greenLight:sevBg[inj.severity],color:inj.status==="Cleared"?C.green:sevColor[inj.severity] }}>
+                  {inj.status==="Cleared"?"✓ Cleared":inj.severity}
+                </span>
+                {inj.status==="Active" && (
+                  <button onClick={()=>handleClear(inj.id)}
+                    style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.green}`,background:"transparent",color:C.green,fontSize:11,cursor:"pointer",fontWeight:600 }}>
+                    ✓ Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10 }}>
+              <div style={{ background:C.surfaceAlt,borderRadius:7,padding:"8px 12px" }}>
+                <div style={{ fontSize:10,color:C.textSoft,fontFamily:"'JetBrains Mono'",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:3 }}>Injury type</div>
+                <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{inj.type}</div>
+              </div>
+              <div style={{ background:C.surfaceAlt,borderRadius:7,padding:"8px 12px" }}>
+                <div style={{ fontSize:10,color:C.textSoft,fontFamily:"'JetBrains Mono'",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:3 }}>Match</div>
+                <div style={{ fontSize:12,color:C.textMid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{inj.match}</div>
+              </div>
+            </div>
+            <div style={{ fontSize:12,color:C.textMid,lineHeight:1.6,padding:"8px 12px",background:C.surfaceAlt,borderRadius:7,marginBottom:6 }}>{inj.notes}</div>
+            <div style={{ fontSize:11,color:C.textDim,fontFamily:"'JetBrains Mono'" }}>Reported {inj.reported}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const links = [
+    { id:"overview",  label:"Overview",       icon:"📊" },
+    { id:"log",       label:"Log Injury",     icon:"🏥" },
+    { id:"injuries",  label:"Injury Log",     icon:"📋" },
+    { id:"teams",     label:"Team Health",    icon:"👥" },
+  ];
+
   return (
-    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={setPage}>
-      {page==="overview" ? (
+    <DashboardShell user={user} onLogout={onLogout} links={links} active={page} onNav={p=>{setPage(p);setShowInjuryForm(false);}}>
+      {page==="overview" && (
         <div className="fade-up">
-          <div style={{ marginBottom:22 }}>
+          <div style={{ marginBottom:20 }}>
             <h1 style={{ fontFamily:"'Syne'",fontSize:26,fontWeight:800,color:C.text }}>Medical Panel</h1>
             <p style={{ fontSize:14,color:C.textSoft }}>{user.name}</p>
           </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:18 }}>
-            <StatCard icon="🏥" label="Active Injuries"   value="4" color={C.red}   sub="Across all teams"/>
-            <StatCard icon="✅" label="Cleared This Week" value="2" color={C.green} sub="Fit to play"/>
-            <StatCard icon="👥" label="Teams Monitored"   value="6" color={C.blue}/>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:18 }}>
+            <StatCard icon="🏥" label="Active injuries"   value={injuries.filter(i=>i.status==="Active").length}   color={C.red}   sub="Across all teams"/>
+            <StatCard icon="🔴" label="Severe"            value={injuries.filter(i=>i.severity==="Severe"&&i.status==="Active").length}   color={C.red}/>
+            <StatCard icon="🟠" label="Moderate"          value={injuries.filter(i=>i.severity==="Moderate"&&i.status==="Active").length} color={C.amber}/>
+            <StatCard icon="✅" label="Cleared today"     value={injuries.filter(i=>i.status==="Cleared").length}  color={C.green}/>
           </div>
-          <div className="card" style={{ padding:20 }}>
-            <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Active injury log</div>
-            {[
-              { player:"Daniel Njoroge",team:"Nairobi Rhinos RFC", injury:"Hamstring strain",   sev:"Moderate",reported:"Today"      },
-              { player:"Grace Wanjiku", team:"Nakuru Eagles RFC",  injury:"Ankle sprain",        sev:"Minor",   reported:"Yesterday"  },
-              { player:"Tom Baraka",    team:"Eldoret Bulls RFC",  injury:"Shoulder dislocation",sev:"Severe",  reported:"3 days ago" },
-              { player:"Ali Hassan",    team:"Mombasa Lions RFC",  injury:"Knee bruise",         sev:"Minor",   reported:"4 days ago" },
-            ].map((inj,i)=>(
-              <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<3?`1px solid ${C.border}`:"none" }}>
-                <span style={{ fontSize:18,flexShrink:0 }}>🏥</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{inj.player} · {inj.team}</div>
-                  <div style={{ fontSize:11,color:C.textSoft }}>{inj.injury} · {inj.reported}</div>
-                </div>
-                <Badge label={inj.sev} color={inj.sev==="Severe"?C.red:inj.sev==="Moderate"?C.amber:C.green}/>
-                <button style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.green}`,background:"transparent",color:C.green,fontSize:11,cursor:"pointer",fontWeight:600 }}>Clear ✓</button>
+
+          {injuries.filter(i=>i.status==="Active"&&i.severity==="Severe").length>0 && (
+            <Alert type="error">🚨 {injuries.filter(i=>i.status==="Active"&&i.severity==="Severe").length} severe injury requires immediate attention — HIA / hospital assessment may be needed.</Alert>
+          )}
+
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
+            <div className="card" style={{ padding:20 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+                <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15 }}>Active injuries</div>
+                <button className="btn-outline-green" onClick={()=>setPage("injuries")} style={{ fontSize:11,padding:"4px 12px" }}>View all</button>
               </div>
-            ))}
+              {injuries.filter(i=>i.status==="Active").map((inj,i)=>(
+                <div key={inj.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<injuries.filter(x=>x.status==="Active").length-1?`1px solid ${C.border}`:"none" }}>
+                  <div style={{ width:8,height:8,borderRadius:"50%",background:sevColor[inj.severity],flexShrink:0 }}/>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{inj.jersey?`#${inj.jersey} `:""}{inj.player} · {inj.team.split(" ")[0]}</div>
+                    <div style={{ fontSize:11,color:C.textSoft }}>{inj.type}</div>
+                  </div>
+                  <span style={{ padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600,background:sevBg[inj.severity],color:sevColor[inj.severity] }}>{inj.severity}</span>
+                </div>
+              ))}
+              {injuries.filter(i=>i.status==="Active").length===0 && (
+                <div style={{ textAlign:"center",padding:"20px",color:C.textSoft,fontSize:13 }}>No active injuries.</div>
+              )}
+            </div>
+            <div className="card" style={{ padding:20 }}>
+              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,marginBottom:14 }}>Quick actions</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                <button className="btn-primary" onClick={()=>{ setShowInjuryForm(true); setPage("log"); }} style={{ fontSize:13,justifyContent:"flex-start" }}>
+                  🏥 Log new injury
+                </button>
+                <button className="btn-ghost" onClick={()=>setPage("injuries")} style={{ fontSize:13,justifyContent:"flex-start" }}>
+                  📋 View all injuries
+                </button>
+                <button className="btn-ghost" onClick={()=>setPage("teams")} style={{ fontSize:13,justifyContent:"flex-start" }}>
+                  👥 Team health overview
+                </button>
+              </div>
+              <div style={{ marginTop:14,padding:"10px 12px",background:C.amberLight,borderRadius:8,fontSize:12,color:C.amber }}>
+                🔔 Team Managers are notified instantly when you log an injury for one of their players.
+              </div>
+            </div>
           </div>
         </div>
-      ) : <ComingSoon icon={links.find(l=>l.id===page)?.icon} label={links.find(l=>l.id===page)?.label}/>}
+      )}
+      {page==="log"      && (showInjuryForm ? <LogInjuryForm/> : (
+        <div className="fade-up" style={{ textAlign:"center",padding:"60px 20px" }}>
+          <div style={{ fontSize:56,marginBottom:16 }}>🏥</div>
+          <div style={{ fontFamily:"'Syne'",fontSize:20,fontWeight:700,color:C.text,marginBottom:8 }}>Log an Injury</div>
+          <p style={{ fontSize:14,color:C.textSoft,marginBottom:20 }}>Record a player injury with severity and clinical notes</p>
+          <button className="btn-primary" onClick={()=>setShowInjuryForm(true)}>+ Log injury now</button>
+        </div>
+      ))}
+      {page==="injuries" && <InjuryListPage/>}
+      {page==="teams"    && <ComingSoon icon="👥" label="Team Health Overview"/>}
     </DashboardShell>
   );
 };
 
-// ─── ROOT APP ─────────────────────────────────────────────────────────────────
+
 export default function App() {
   const [view, setView] = useState("landing");
   const [user, setUser] = useState(null);
-  const [liveMatches, setLiveMatches] = useState([]);
+  const [liveMatches, setLiveMatches]     = useState([]);
+  const [notifications, setNotifications] = useState([]);
+
+  const handleNotify = (notif) => {
+    setNotifications(prev => [{ id: Date.now(), ...notif, read: false }, ...prev]);
+  };
 
   const handleLogin = (u) => { setUser(u); setView("dashboard"); };
   const handleLogout = () => { setUser(null); setView("landing"); };
@@ -2588,10 +3477,10 @@ export default function App() {
         <>
           {user.role==="super_admin"          && <SuperAdminDashboard          {...p}/>}
           {user.role==="tournament_organizer"  && <TournamentOrganizerDashboard {...p}/>}
-          {user.role==="team_manager"          && <TeamManagerDashboard         {...p}/>}
+          {user.role==="team_manager"          && <TeamManagerDashboard         {...p} notifications={notifications}/>}
           {user.role==="data_entry"            && <DataEntryDashboard           {...p} liveMatches={liveMatches} setLiveMatches={setLiveMatches}/>}
-          {user.role==="master_referee"        && <MasterRefereeDashboard       {...p}/>}
-          {user.role==="medic"                 && <MedicDashboard               {...p}/>}
+          {user.role==="master_referee"        && <MasterRefereeDashboard       {...p} onNotify={handleNotify}/>}
+          {user.role==="medic"                 && <MedicDashboard               {...p} onNotify={handleNotify}/>}
         </>
       )}
     </>
