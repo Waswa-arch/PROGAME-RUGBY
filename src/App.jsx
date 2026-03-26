@@ -201,7 +201,7 @@ const DashboardShell = ({ user, onLogout, links, active, onNav, children, notifC
     <Topbar user={user} onLogout={onLogout} notifCount={notifCount}/>
     <div style={{ display: "flex", flex: 1, overflow: "hidden", height: "calc(100vh - 56px)" }}>
       <Sidebar links={links} active={active} onNav={onNav} user={user}/>
-      <main style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>{children}</main>
+      <main id="main-content" style={{ flex: 1, padding: "24px 28px", overflowY: "auto", scrollBehavior:"auto" }}>{children}</main>
     </div>
   </div>
 );
@@ -1216,6 +1216,584 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 };
 
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TOURNAMENT ORGANIZER — MISSING PAGES
+// ═══════════════════════════════════════════════════════════════════════════
+
+const OrgSchedulePage = ({ squads, tournaments }) => {
+  const [selectedTournId, setSelectedTournId] = React.useState(tournaments[0]?.id||"t1");
+  const [matches, setMatches] = React.useState([
+    { id:"ms1", home:"Nairobi Rhinos RFC",  away:"Kisumu Tigers RFC",   date:"2025-06-07", time:"14:00", venue:"RFUEA Ground",   round:"Group A · MD1", status:"Scheduled" },
+    { id:"ms2", home:"Mombasa Lions RFC",   away:"Thika Panthers RFC",  date:"2025-06-07", time:"16:30", venue:"RFUEA Ground",   round:"Group A · MD1", status:"Scheduled" },
+    { id:"ms3", home:"Nakuru Eagles RFC",   away:"Eldoret Bulls RFC",   date:"2025-06-08", time:"14:00", venue:"Kisumu Stadium", round:"Group B · MD1", status:"Scheduled" },
+    { id:"ms4", home:"Kisumu Tigers RFC",   away:"Mombasa Lions RFC",   date:"2025-06-14", time:"14:00", venue:"RFUEA Ground",   round:"Group A · MD2", status:"Scheduled" },
+    { id:"ms5", home:"Nairobi Rhinos RFC",  away:"Thika Panthers RFC",  date:"2025-06-14", time:"16:30", venue:"RFUEA Ground",   round:"Group A · MD2", status:"Scheduled" },
+  ]);
+  const [showAddForm, setShowAddForm] = React.useState(false);
+  const [mForm, setMForm] = React.useState({ home:"", away:"", date:"", time:"14:00", venue:"", round:"" });
+  const [success, setSuccess] = React.useState(false);
+  const setM = (k,v) => setMForm(f=>({...f,[k]:v}));
+
+  const teamNames = squads.map(s=>s.team);
+
+  const handleAdd = () => {
+    if (!mForm.home||!mForm.away||!mForm.date||!mForm.venue) return;
+    setMatches(prev=>[...prev,{ id:`ms${Date.now()}`, ...mForm, status:"Scheduled" }]);
+    setMForm({ home:"",away:"",date:"",time:"14:00",venue:"",round:"" });
+    setSuccess(true); setTimeout(()=>setSuccess(false),2000);
+  };
+
+  const groupedByDate = matches.reduce((acc,m) => {
+    const k = m.date; if (!acc[k]) acc[k]=[]; acc[k].push(m); return acc;
+  }, {});
+
+  return (
+    <div className="fade-up">
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
+        <div>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Match Schedule</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>{matches.length} matches scheduled</p>
+        </div>
+        <button className="btn-primary" onClick={()=>setShowAddForm(v=>!v)} style={{ fontSize:13 }}>
+          {showAddForm?"✕ Cancel":"+ Schedule Match"}
+        </button>
+      </div>
+
+      {success && <div style={{ padding:"10px 14px",background:C.greenLight,border:`1px solid ${C.green}28`,borderRadius:8,fontSize:13,color:C.green,marginBottom:14 }}>✅ Match scheduled successfully!</div>}
+
+      {showAddForm && (
+        <div className="card" style={{ padding:"20px 22px",marginBottom:18,border:`1px solid ${C.green}28` }}>
+          <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,marginBottom:16 }}>Schedule new match</div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <Field label="Home Team *"><SelectField placeholder="— Select home team —" value={mForm.home} onChange={e=>setM("home",e.target.value)} options={teamNames.map(t=>({value:t,label:t}))}/></Field>
+            <Field label="Away Team *"><SelectField placeholder="— Select away team —" value={mForm.away} onChange={e=>setM("away",e.target.value)} options={teamNames.map(t=>({value:t,label:t}))}/></Field>
+            <Field label="Date *"><Input type="date" value={mForm.date} onChange={e=>setM("date",e.target.value)}/></Field>
+            <Field label="Kick-off time *"><Input type="time" value={mForm.time} onChange={e=>setM("time",e.target.value)}/></Field>
+            <Field label="Venue *"><Input placeholder="e.g. RFUEA Ground, Nairobi" value={mForm.venue} onChange={e=>setM("venue",e.target.value)}/></Field>
+            <Field label="Round / Stage"><Input placeholder="e.g. Group A · Matchday 1" value={mForm.round} onChange={e=>setM("round",e.target.value)}/></Field>
+          </div>
+          <button className="btn-primary" onClick={handleAdd} style={{ marginTop:12,fontSize:13 }}>Save match</button>
+        </div>
+      )}
+
+      {Object.keys(groupedByDate).sort().map(date => (
+        <div key={date} style={{ marginBottom:18 }}>
+          <div style={{ fontSize:11,fontWeight:700,color:C.textSoft,fontFamily:"'JetBrains Mono'",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8,paddingBottom:6,borderBottom:`1px solid ${C.border}` }}>
+            {new Date(date+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+          </div>
+          {groupedByDate[date].map((m,i) => (
+            <div key={m.id} className="card" style={{ padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"center",gap:14 }}>
+              <div style={{ textAlign:"center",padding:"8px 14px",background:C.surfaceAlt,borderRadius:8,minWidth:70 }}>
+                <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:18,color:C.text }}>{m.time}</div>
+                <div style={{ fontSize:10,color:C.textSoft }}>Kick-off</div>
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text,marginBottom:3 }}>
+                  {m.home} <span style={{ color:C.textSoft,fontWeight:400 }}>vs</span> {m.away}
+                </div>
+                <div style={{ fontSize:12,color:C.textSoft }}>{m.venue}{m.round?` · ${m.round}`:""}</div>
+              </div>
+              <span style={{ padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:m.status==="Live"?"rgba(192,57,43,0.1)":C.blueLight,color:m.status==="Live"?C.red:C.blue }}>{m.status}</span>
+              <button onClick={()=>setMatches(prev=>prev.filter(x=>x.id!==m.id))} style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:11,cursor:"pointer" }}>Remove</button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const OrgTaggingPage = ({ squads }) => {
+  const [selectedTeam, setSelectedTeam] = React.useState(squads[0]?.team||"");
+  const [tagStatuses, setTagStatuses] = React.useState({});
+  const squad = squads.find(s=>s.team===selectedTeam);
+
+  const mockPlayers = [
+    { jersey:1, name:"James Kamau",    pos:"Loosehead Prop" },
+    { jersey:2, name:"Ali Hassan",     pos:"Hooker"         },
+    { jersey:3, name:"Brian Waweru",   pos:"Tighthead Prop" },
+    { jersey:4, name:"Moses Otieno",   pos:"Lock"           },
+    { jersey:5, name:"Peter Omondi",   pos:"Flanker"        },
+    { jersey:8, name:"Daniel Njoroge", pos:"Number 8"       },
+    { jersey:9, name:"Kevin Mutua",    pos:"Scrum-half"     },
+    { jersey:10,name:"Grace Wanjiku",  pos:"Fly-half"       },
+    { jersey:11,name:"Samuel Mutua",   pos:"Winger"         },
+    { jersey:12,name:"David Njoroge",  pos:"Centre"         },
+    { jersey:13,name:"Eric Ochieng",   pos:"Centre"         },
+    { jersey:15,name:"Tom Baraka",     pos:"Full-back"      },
+  ];
+
+  const tag = (jersey, status) => setTagStatuses(prev=>({...prev,[`${selectedTeam}-${jersey}`]:status}));
+  const getStatus = (jersey) => tagStatuses[`${selectedTeam}-${jersey}`] || "Untagged";
+
+  const statusColor = { Tagged:C.green, Flagged:C.red, Untagged:C.textSoft };
+  const statusBg    = { Tagged:C.greenLight, Flagged:C.redLight, Untagged:C.surfaceAlt };
+
+  const tagged  = mockPlayers.filter(p=>getStatus(p.jersey)==="Tagged").length;
+  const flagged = mockPlayers.filter(p=>getStatus(p.jersey)==="Flagged").length;
+
+  return (
+    <div className="fade-up">
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Player Tagging</h1>
+        <p style={{ fontSize:13,color:C.textSoft }}>Verify player identity before matchday — compare face to uploaded ID photo</p>
+      </div>
+      <div style={{ padding:"10px 14px",background:C.blueLight,border:`1px solid ${C.blue}28`,borderRadius:8,fontSize:12,color:C.blue,marginBottom:16 }}>
+        ℹ️ Facial recognition compares the player's live face to their Kenyan ID photo. An 80–85% match is required. Players below threshold are flagged and cannot play until resolved.
+      </div>
+
+      {/* Team selector */}
+      <Field label="Select team to tag">
+        <SelectField value={selectedTeam} onChange={e=>setSelectedTeam(e.target.value)} options={squads.map(s=>({value:s.team,label:s.team}))}/>
+      </Field>
+
+      {/* Stats */}
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:18 }}>
+        <div className="card" style={{ padding:"12px 16px",textAlign:"center" }}>
+          <div style={{ fontFamily:"'Syne'",fontWeight:800,fontSize:24,color:C.green }}>{tagged}</div>
+          <div style={{ fontSize:12,color:C.textSoft }}>Tagged ✅</div>
+        </div>
+        <div className="card" style={{ padding:"12px 16px",textAlign:"center" }}>
+          <div style={{ fontFamily:"'Syne'",fontWeight:800,fontSize:24,color:C.red }}>{flagged}</div>
+          <div style={{ fontSize:12,color:C.textSoft }}>Flagged 🚩</div>
+        </div>
+        <div className="card" style={{ padding:"12px 16px",textAlign:"center" }}>
+          <div style={{ fontFamily:"'Syne'",fontWeight:800,fontSize:24,color:C.textSoft }}>{mockPlayers.length-tagged-flagged}</div>
+          <div style={{ fontSize:12,color:C.textSoft }}>Pending</div>
+        </div>
+      </div>
+
+      {/* Player list */}
+      <div className="card" style={{ overflow:"hidden" }}>
+        <div style={{ display:"grid",gridTemplateColumns:"44px 1fr 90px 110px 180px",padding:"0 16px",height:38,alignItems:"center",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+          {["#","Player","Position","Status","Action"].map(h=>(
+            <span key={h} style={{ fontSize:10,color:C.textSoft,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'JetBrains Mono'" }}>{h}</span>
+          ))}
+        </div>
+        {mockPlayers.map((p,i)=>{
+          const st = getStatus(p.jersey);
+          const matchPct = st==="Tagged"?Math.floor(82+Math.random()*8):st==="Flagged"?Math.floor(55+Math.random()*20):null;
+          return (
+            <div key={p.jersey} style={{ display:"grid",gridTemplateColumns:"44px 1fr 90px 110px 180px",alignItems:"center",padding:"0 16px",minHeight:52,borderBottom:`1px solid ${C.border}`,background:st==="Flagged"?"rgba(192,57,43,0.03)":i%2===0?"transparent":C.surfaceAlt }}>
+              <div style={{ width:30,height:30,borderRadius:7,background:C.greenLight,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono'",fontSize:11,fontWeight:700,color:C.green }}>#{p.jersey}</div>
+              <div>
+                <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{p.name}</div>
+                {matchPct && <div style={{ fontSize:11,color:st==="Tagged"?C.green:C.red,fontFamily:"'JetBrains Mono'",fontWeight:600 }}>{matchPct}% match</div>}
+              </div>
+              <span style={{ fontSize:12,color:C.textSoft }}>{p.pos}</span>
+              <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:statusBg[st],color:statusColor[st] }}>{st}</span>
+              <div style={{ display:"flex",gap:6 }}>
+                {st==="Untagged"&&(
+                  <>
+                    <button onClick={()=>tag(p.jersey,"Tagged")} style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.green}`,background:"transparent",color:C.green,fontSize:11,cursor:"pointer",fontWeight:600 }}>✓ Tag</button>
+                    <button onClick={()=>tag(p.jersey,"Flagged")} style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:11,cursor:"pointer" }}>🚩 Flag</button>
+                  </>
+                )}
+                {st==="Tagged"&&<button onClick={()=>tag(p.jersey,"Untagged")} style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.borderDark}`,background:"transparent",color:C.textSoft,fontSize:11,cursor:"pointer" }}>Reset</button>}
+                {st==="Flagged"&&(
+                  <>
+                    <button onClick={()=>tag(p.jersey,"Tagged")} style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.green}`,background:"transparent",color:C.green,fontSize:11,cursor:"pointer",fontWeight:600 }}>✓ Approve</button>
+                    <button onClick={()=>tag(p.jersey,"Untagged")} style={{ padding:"4px 10px",borderRadius:5,border:`1px solid ${C.borderDark}`,background:"transparent",color:C.textSoft,fontSize:11,cursor:"pointer" }}>Reset</button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const OrgCardsPage = () => {
+  const suspensions = [
+    { player:"James Kamau",   jersey:1,  team:"Nairobi Rhinos RFC", card:"Red",    ban:1, ban_remaining:1, status:"Active",   match:"vs Kisumu Tigers",  issued:"Mar 23" },
+    { player:"Collins Otieno",jersey:10, team:"Kisumu Tigers RFC",  card:"Yellow", ban:0, ban_remaining:0, status:"Warning",  match:"vs Nairobi Rhinos", issued:"Mar 23" },
+    { player:"Mark Waweru",   jersey:8,  team:"Kisumu Tigers RFC",  card:"Citing", ban:0, ban_remaining:0, status:"Under investigation", match:"vs Nairobi Rhinos", issued:"Mar 23" },
+  ];
+  const [bans, setBans] = React.useState(suspensions);
+
+  return (
+    <div className="fade-up">
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Cards & Suspensions</h1>
+        <p style={{ fontSize:13,color:C.textSoft }}>Review and manage disciplinary records from all matches</p>
+      </div>
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:18 }}>
+        <StatCard icon="🟥" label="Active bans"     value={bans.filter(b=>b.status==="Active").length}              color={C.red}/>
+        <StatCard icon="⚠️" label="Under review"    value={bans.filter(b=>b.status==="Under investigation").length} color={C.amber}/>
+        <StatCard icon="🟨" label="Warnings"        value={bans.filter(b=>b.status==="Warning").length}             color="#B8860B"/>
+      </div>
+      <div className="card" style={{ overflow:"hidden" }}>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 80px 110px 90px 130px",padding:"0 16px",height:38,alignItems:"center",background:C.surfaceAlt,borderBottom:`1px solid ${C.border}` }}>
+          {["Player","Team","Card","Status","Issued","Action"].map(h=>(
+            <span key={h} style={{ fontSize:10,color:C.textSoft,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'JetBrains Mono'" }}>{h}</span>
+          ))}
+        </div>
+        {bans.map((b,i)=>(
+          <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 1fr 80px 110px 90px 130px",alignItems:"center",padding:"0 16px",minHeight:52,borderBottom:`1px solid ${C.border}`,background:i%2===0?"transparent":C.surfaceAlt }}>
+            <div>
+              <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{b.jersey?`#${b.jersey} `:""}{b.player}</div>
+              <div style={{ fontSize:11,color:C.textSoft }}>{b.match}</div>
+            </div>
+            <span style={{ fontSize:12,color:C.textMid }}>{b.team}</span>
+            <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:b.card==="Red"?C.redLight:b.card==="Yellow"?"#FDF6E3":C.purpleLight,color:b.card==="Red"?C.red:b.card==="Yellow"?"#B8860B":C.purple }}>
+              {b.card==="Red"?"🟥":b.card==="Yellow"?"🟨":"📋"} {b.card}
+            </span>
+            <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:b.status==="Active"?C.redLight:b.status==="Warning"?"#FDF6E3":C.amberLight,color:b.status==="Active"?C.red:b.status==="Warning"?"#B8860B":C.amber }}>{b.status}</span>
+            <span style={{ fontSize:12,color:C.textSoft,fontFamily:"'JetBrains Mono'" }}>{b.issued}</span>
+            <div style={{ display:"flex",gap:5 }}>
+              {b.status==="Active"&&<button onClick={()=>setBans(prev=>prev.map((x,j)=>j===i?{...x,ban_remaining:Math.max(0,x.ban_remaining-1),status:x.ban_remaining<=1?"Served":"Active"}:x))} style={{ padding:"3px 8px",borderRadius:5,border:`1px solid ${C.green}`,background:"transparent",color:C.green,fontSize:10,cursor:"pointer",fontWeight:600 }}>Serve match</button>}
+              {b.status==="Under investigation"&&<button onClick={()=>setBans(prev=>prev.map((x,j)=>j===i?{...x,status:"Active",ban:2}:x))} style={{ padding:"3px 8px",borderRadius:5,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:10,cursor:"pointer",fontWeight:600 }}>Confirm ban</button>}
+              {b.ban>0&&<span style={{ fontSize:10,color:C.textSoft,fontFamily:"'JetBrains Mono'" }}>{b.ban_remaining}/{b.ban} games</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const OrgNotificationsPage = () => {
+  const [notifs, setNotifs] = React.useState([
+    { id:1,icon:"📋",title:"Squad submitted",       body:"Nairobi Rhinos RFC submitted their squad for KRU Cup 2025 — 18 players.",              time:"2h ago",  read:false },
+    { id:2,icon:"🟥",title:"Red card issued",        body:"Referee issued red card to James Kamau (#1, Nairobi Rhinos) — dangerous play.",        time:"3h ago",  read:false },
+    { id:3,icon:"🏥",title:"Injury reported",        body:"Medic logged severe injury — Mark Waweru (#8, Kisumu Tigers). Concussion, withdrawn.",  time:"4h ago",  read:false },
+    { id:4,icon:"📋",title:"Squad submitted",        body:"Thika Panthers RFC submitted their squad for KRU Cup 2025 — 17 players.",             time:"1d ago",  read:true  },
+    { id:5,icon:"⚠️",title:"Facial match failed",    body:"Player Daniel Baraka (Eldoret Bulls) — facial recognition match only 61%. Flagged.",   time:"1d ago",  read:true  },
+    { id:6,icon:"✅",title:"Registration approved",  body:"Super Admin approved your account. Platform access is now fully active.",             time:"2d ago",  read:true  },
+  ]);
+
+  const markRead = (id) => setNotifs(prev=>prev.map(n=>n.id===id?{...n,read:true}:n));
+  const markAllRead = () => setNotifs(prev=>prev.map(n=>({...n,read:true})));
+  const unread = notifs.filter(n=>!n.read).length;
+
+  return (
+    <div className="fade-up">
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
+        <div>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Notifications</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>{unread} unread</p>
+        </div>
+        {unread>0&&<button className="btn-ghost" onClick={markAllRead} style={{ fontSize:12 }}>Mark all read</button>}
+      </div>
+      <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+        {notifs.map(n=>(
+          <div key={n.id} onClick={()=>markRead(n.id)} className="card"
+            style={{ padding:"14px 18px",cursor:"pointer",background:n.read?"transparent":"rgba(26,86,219,0.03)",borderLeft:`3px solid ${n.read?C.border:C.blue}` }}>
+            <div style={{ display:"flex",alignItems:"flex-start",gap:12 }}>
+              <span style={{ fontSize:22,flexShrink:0 }}>{n.icon}</span>
+              <div style={{ flex:1 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",marginBottom:3 }}>
+                  <div style={{ fontSize:13,fontWeight:n.read?500:700,color:C.text }}>{n.title}</div>
+                  <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                    <span style={{ fontSize:11,color:C.textDim,fontFamily:"'JetBrains Mono'" }}>{n.time}</span>
+                    {!n.read&&<span style={{ width:8,height:8,borderRadius:"50%",background:C.blue,display:"inline-block" }}/>}
+                  </div>
+                </div>
+                <div style={{ fontSize:12,color:C.textSoft,lineHeight:1.5 }}>{n.body}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TEAM MANAGER — MISSING PAGES
+// ═══════════════════════════════════════════════════════════════════════════
+
+const TMInjuriesPage = ({ externalNotifs }) => {
+  const injuryNotifs = (externalNotifs||[]).filter(n=>n.type==="injury");
+  const mockInjuries = [
+    { player:"Daniel Njoroge",jersey:8, injury:"Hamstring strain",  severity:"Moderate",status:"Active", reported:"Mar 23 14:45",medic:"Dr. Wanjiku",notes:"Left hamstring. Resting." },
+    { player:"Tom Baraka",    jersey:15,injury:"Shoulder bruise",   severity:"Minor",   status:"Cleared",reported:"Mar 20 10:00",medic:"Dr. Wanjiku",notes:"Strapped, returned to play." },
+  ];
+  const combined = [
+    ...injuryNotifs.map(n=>({ player:n.player,jersey:"",injury:n.injury,severity:n.severity,status:"Active",reported:n.time,medic:"Medic",notes:`Logged during match` })),
+    ...mockInjuries,
+  ];
+  const sevColor = { Minor:C.green,Moderate:C.amber,Severe:C.red,Unknown:C.purple };
+  const sevBg    = { Minor:C.greenLight,Moderate:C.amberLight,Severe:C.redLight,Unknown:C.purpleLight };
+
+  return (
+    <div className="fade-up">
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Injuries</h1>
+        <p style={{ fontSize:13,color:C.textSoft }}>Nairobi Rhinos RFC · {combined.filter(i=>i.status==="Active").length} active</p>
+      </div>
+      {combined.filter(i=>i.status==="Active").length>0&&(
+        <Alert type="error">🏥 {combined.filter(i=>i.status==="Active").length} player{combined.filter(i=>i.status==="Active").length>1?"s are":" is"} currently injured. Review squad availability before your next match.</Alert>
+      )}
+      <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+        {combined.map((inj,i)=>(
+          <div key={i} className="card" style={{ padding:"16px 20px",borderLeft:`3px solid ${inj.status==="Cleared"?C.green:sevColor[inj.severity]||C.red}` }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                <span style={{ fontSize:22 }}>🏥</span>
+                <div>
+                  <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text }}>{inj.jersey?`#${inj.jersey} `:""}{inj.player}</div>
+                  <div style={{ fontSize:12,color:C.textSoft }}>{inj.injury}</div>
+                </div>
+              </div>
+              <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:sevBg[inj.severity]||C.redLight,color:sevColor[inj.severity]||C.red }}>{inj.severity}</span>
+                <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:inj.status==="Cleared"?C.greenLight:C.redLight,color:inj.status==="Cleared"?C.green:C.red }}>{inj.status}</span>
+              </div>
+            </div>
+            <div style={{ fontSize:12,color:C.textMid,lineHeight:1.5,padding:"8px 12px",background:C.surfaceAlt,borderRadius:7 }}>{inj.notes}</div>
+            <div style={{ fontSize:11,color:C.textDim,marginTop:6,fontFamily:"'JetBrains Mono'" }}>Reported by {inj.medic} · {inj.reported}</div>
+          </div>
+        ))}
+        {combined.length===0&&<div style={{ textAlign:"center",padding:"40px",color:C.textSoft }}>✅ No injuries reported for your team.</div>}
+      </div>
+    </div>
+  );
+};
+
+const TMCardsPage = ({ externalNotifs }) => {
+  const cardNotifs = (externalNotifs||[]).filter(n=>n.type==="red_card"||n.type==="yellow_card"||n.type==="card");
+  const mockCards = [
+    { player:"James Kamau",  jersey:1, card:"Red",   offence:"Dangerous tackle", ban:1,ban_served:0,match:"vs Kisumu Tigers",time:"Mar 23 14:34",status:"Active" },
+    { player:"Brian Waweru", jersey:4, card:"Yellow", offence:"Late tackle",      ban:0,ban_served:0,match:"vs Kisumu Tigers",time:"Mar 23 15:12",status:"Warning" },
+  ];
+  const combined = [
+    ...cardNotifs.map(n=>({ player:n.player,jersey:"",card:n.card,offence:n.offence||"See referee report",ban:n.ban||0,ban_served:0,match:n.match,time:n.time,status:n.card==="Red"?"Active":"Warning",auto_red:n.auto_red })),
+    ...mockCards,
+  ];
+
+  return (
+    <div className="fade-up">
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Cards & Flags</h1>
+        <p style={{ fontSize:13,color:C.textSoft }}>Nairobi Rhinos RFC · disciplinary record</p>
+      </div>
+      {combined.filter(c=>c.status==="Active").length>0&&(
+        <Alert type="error">🟥 {combined.filter(c=>c.status==="Active").length} player{combined.filter(c=>c.status==="Active").length>1?"s are":" is"} currently suspended and cannot play.</Alert>
+      )}
+      <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+        {combined.map((c,i)=>(
+          <div key={i} className="card" style={{ padding:"16px 20px",borderLeft:`3px solid ${c.card==="Red"?C.red:c.card==="Yellow"?"#B8860B":C.purple}` }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                <span style={{ fontSize:22 }}>{c.card==="Red"?"🟥":c.card==="Yellow"?"🟨":"📋"}</span>
+                <div>
+                  <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text }}>{c.jersey?`#${c.jersey} `:""}{c.player}</div>
+                  <div style={{ fontSize:12,color:C.textSoft }}>{c.offence}{c.auto_red?" (2nd yellow → auto red)":""}</div>
+                </div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:c.status==="Active"?C.redLight:C.surfaceAlt,color:c.status==="Active"?C.red:C.textSoft }}>{c.status}</span>
+                <div style={{ fontSize:11,color:C.textDim,marginTop:3,fontFamily:"'JetBrains Mono'" }}>{c.time}</div>
+              </div>
+            </div>
+            {c.ban>0&&(
+              <div style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:C.redLight,borderRadius:7 }}>
+                <span style={{ fontSize:14 }}>🚫</span>
+                <span style={{ fontSize:12,color:C.red,fontWeight:600 }}>{c.ban}-match ban · {c.ban-c.ban_served} game{c.ban-c.ban_served!==1?"s":""} remaining</span>
+              </div>
+            )}
+            <div style={{ fontSize:11,color:C.textSoft,marginTop:6 }}>Match: {c.match}</div>
+          </div>
+        ))}
+        {combined.length===0&&<div style={{ textAlign:"center",padding:"40px",color:C.textSoft }}>✅ No cards issued to your players.</div>}
+      </div>
+    </div>
+  );
+};
+
+const TMNotificationsPage = ({ externalNotifs }) => {
+  const [readIds, setReadIds] = React.useState(new Set());
+  const staticNotifs = [
+    { id:"s1",icon:"✅",title:"Squad approved",       body:"Tournament Organizer approved your squad for KRU Cup 2025. All 18 players cleared.",time:"1d ago" },
+    { id:"s2",icon:"📋",title:"Tournament registered", body:"Nairobi Rhinos RFC successfully registered for KRU Cup 2025. Squad submission is open.",time:"2d ago" },
+  ];
+  const liveNotifs = (externalNotifs||[]).map((n,i)=>({
+    id:`live-${i}`,
+    icon:n.type==="red_card"?"🟥":n.type==="yellow_card"?"🟨":n.type==="injury"?"🏥":"🔔",
+    title:n.type==="red_card"?`Red card — ${n.player}`:n.type==="yellow_card"?`Yellow card — ${n.player}`:`Injury — ${n.player}`,
+    body:n.type==="injury"?`${n.severity} injury reported: ${n.injury}. Logged by medic.`
+         :n.type==="red_card"?`${n.ban>0?`${n.ban}-match ban issued.`:""} Review squad availability.`
+         :`Warning — 2nd yellow = automatic red card suspension.`,
+    time:n.time,
+    isNew:true,
+  }));
+  const all = [...liveNotifs,...staticNotifs];
+  const unread = all.filter(n=>!readIds.has(n.id)&&n.isNew).length;
+
+  return (
+    <div className="fade-up">
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
+        <div>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Notifications</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>{unread} unread</p>
+        </div>
+        {unread>0&&<button className="btn-ghost" onClick={()=>setReadIds(new Set(all.map(n=>n.id)))} style={{ fontSize:12 }}>Mark all read</button>}
+      </div>
+      <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+        {all.map(n=>(
+          <div key={n.id} onClick={()=>setReadIds(prev=>new Set([...prev,n.id]))} className="card"
+            style={{ padding:"14px 18px",cursor:"pointer",background:readIds.has(n.id)||!n.isNew?"transparent":"rgba(26,86,219,0.03)",borderLeft:`3px solid ${readIds.has(n.id)||!n.isNew?C.border:C.blue}` }}>
+            <div style={{ display:"flex",alignItems:"flex-start",gap:12 }}>
+              <span style={{ fontSize:22,flexShrink:0 }}>{n.icon}</span>
+              <div style={{ flex:1 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",marginBottom:3 }}>
+                  <div style={{ fontSize:13,fontWeight:readIds.has(n.id)||!n.isNew?500:700,color:C.text }}>{n.title}</div>
+                  <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                    <span style={{ fontSize:11,color:C.textDim,fontFamily:"'JetBrains Mono'" }}>{n.time}</span>
+                    {n.isNew&&!readIds.has(n.id)&&<span style={{ width:8,height:8,borderRadius:"50%",background:C.blue,display:"inline-block" }}/>}
+                  </div>
+                </div>
+                <div style={{ fontSize:12,color:C.textSoft,lineHeight:1.5 }}>{n.body}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+        {all.length===0&&<div style={{ textAlign:"center",padding:"40px",color:C.textSoft }}>No notifications yet.</div>}
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REFEREE — MATCH REPORTS PAGE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const RefMatchReportsPage = ({ cards }) => {
+  const [reports, setReports] = React.useState([
+    { id:"rep1",match:"Nairobi Rhinos vs Kisumu Tigers",date:"Mar 23",venue:"RFUEA Ground",home_score:21,away_score:14,cards_issued:cards.length,incidents:"1 red card, 2 yellow cards, 1 citing. Match played in good spirit despite card incidents.",status:"Submitted" },
+  ]);
+  const [showForm, setShowForm] = React.useState(false);
+  const [rForm, setRForm] = React.useState({ match:"",date:"",venue:"",home_score:"",away_score:"",incidents:"" });
+  const setR = (k,v) => setRForm(f=>({...f,[k]:v}));
+
+  const handleSubmit = () => {
+    if (!rForm.match||!rForm.incidents) return;
+    setReports(prev=>[{ id:`rep${Date.now()}`,cards_issued:0,status:"Submitted",...rForm },
+      ...prev]);
+    setRForm({ match:"",date:"",venue:"",home_score:"",away_score:"",incidents:"" });
+    setShowForm(false);
+  };
+
+  return (
+    <div className="fade-up">
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
+        <div>
+          <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Match Reports</h1>
+          <p style={{ fontSize:13,color:C.textSoft }}>{reports.length} report{reports.length!==1?"s":""} submitted</p>
+        </div>
+        <button className="btn-primary" onClick={()=>setShowForm(v=>!v)} style={{ fontSize:13,background:C.coral }}>
+          {showForm?"✕ Cancel":"📝 New report"}
+        </button>
+      </div>
+
+      {showForm&&(
+        <div className="card" style={{ padding:"20px 22px",marginBottom:18,border:`1px solid ${C.coral}28` }}>
+          <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,marginBottom:16 }}>Post-match report</div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <Field label="Match *"><Input placeholder="Home vs Away" value={rForm.match} onChange={e=>setR("match",e.target.value)}/></Field>
+            <Field label="Date"><Input type="date" value={rForm.date} onChange={e=>setR("date",e.target.value)}/></Field>
+            <Field label="Venue"><Input placeholder="Venue name" value={rForm.venue} onChange={e=>setR("venue",e.target.value)}/></Field>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+              <Field label="Home score"><Input type="number" value={rForm.home_score} onChange={e=>setR("home_score",e.target.value)}/></Field>
+              <Field label="Away score"><Input type="number" value={rForm.away_score} onChange={e=>setR("away_score",e.target.value)}/></Field>
+            </div>
+          </div>
+          <Field label="Incidents & observations *">
+            <textarea className="input-field" placeholder="Describe any incidents, card reasons, player conduct, ground conditions, any other observations relevant to the tournament organizer..."
+              rows={5} value={rForm.incidents} onChange={e=>setR("incidents",e.target.value)} style={{ resize:"vertical" }}/>
+          </Field>
+          <button className="btn-primary" onClick={handleSubmit} style={{ background:C.coral,fontSize:13 }}>Submit report</button>
+        </div>
+      )}
+
+      {reports.map((r,i)=>(
+        <div key={r.id} className="card" style={{ padding:"18px 22px",marginBottom:10 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
+            <div>
+              <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:15,color:C.text,marginBottom:3 }}>{r.match}</div>
+              <div style={{ fontSize:12,color:C.textSoft }}>{r.venue}{r.date?` · ${r.date}`:""}</div>
+            </div>
+            <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+              {(r.home_score!==undefined&&r.away_score!==undefined)&&(
+                <div style={{ fontFamily:"'Syne'",fontWeight:800,fontSize:20,color:C.text,padding:"4px 14px",background:C.surfaceAlt,borderRadius:8 }}>
+                  {r.home_score} — {r.away_score}
+                </div>
+              )}
+              <span style={{ padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:C.greenLight,color:C.green }}>{r.status}</span>
+            </div>
+          </div>
+          <div style={{ padding:"10px 14px",background:C.surfaceAlt,borderRadius:8,fontSize:13,color:C.textMid,lineHeight:1.6,marginBottom:8 }}>{r.incidents}</div>
+          <div style={{ fontSize:11,color:C.textDim,fontFamily:"'JetBrains Mono'" }}>Cards issued this match: {r.cards_issued}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MEDIC — TEAM HEALTH PAGE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const MedicTeamHealthPage = ({ injuries }) => {
+  const teams = [
+    { name:"Nairobi Rhinos RFC", players:18 },
+    { name:"Kisumu Tigers RFC",  players:21 },
+    { name:"Mombasa Lions RFC",  players:20 },
+    { name:"Eldoret Bulls RFC",  players:17 },
+    { name:"Nakuru Eagles RFC",  players:19 },
+    { name:"Thika Panthers RFC", players:16 },
+  ];
+
+  const sevColor = { Minor:C.green,Moderate:C.amber,Severe:C.red,Unknown:C.purple };
+  const sevBg    = { Minor:C.greenLight,Moderate:C.amberLight,Severe:C.redLight,Unknown:C.purpleLight };
+
+  return (
+    <div className="fade-up">
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontFamily:"'Syne'",fontSize:24,fontWeight:800,color:C.text }}>Team Health</h1>
+        <p style={{ fontSize:13,color:C.textSoft }}>Health overview across all registered teams</p>
+      </div>
+      <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+        {teams.map((team,i)=>{
+          const teamInjuries = injuries.filter(inj=>inj.team===team.name&&inj.status==="Active");
+          const hasSevere    = teamInjuries.some(inj=>inj.severity==="Severe");
+          return (
+            <div key={i} className="card" style={{ padding:"16px 20px",borderLeft:`3px solid ${hasSevere?C.red:teamInjuries.length>0?C.amber:C.green}` }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:teamInjuries.length>0?12:0 }}>
+                <div>
+                  <div style={{ fontFamily:"'Syne'",fontWeight:700,fontSize:14,color:C.text }}>{team.name}</div>
+                  <div style={{ fontSize:12,color:C.textSoft }}>{team.players} registered players</div>
+                </div>
+                <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                  <span style={{ padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:hasSevere?C.redLight:teamInjuries.length>0?C.amberLight:C.greenLight,color:hasSevere?C.red:teamInjuries.length>0?C.amber:C.green }}>
+                    {teamInjuries.length===0?"✅ Fully fit":`${teamInjuries.length} injury${teamInjuries.length>1?"":""}${hasSevere?" 🚨":""}`}
+                  </span>
+                </div>
+              </div>
+              {teamInjuries.map((inj,j)=>(
+                <div key={j} style={{ display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:C.surfaceAlt,borderRadius:7,marginBottom:6 }}>
+                  <div style={{ width:8,height:8,borderRadius:"50%",background:sevColor[inj.severity]||C.red,flexShrink:0 }}/>
+                  <div style={{ flex:1 }}>
+                    <span style={{ fontSize:12,fontWeight:600,color:C.text }}>{inj.jersey?`#${inj.jersey} `:""}{inj.player}</span>
+                    <span style={{ fontSize:11,color:C.textSoft }}> · {inj.type}</span>
+                  </div>
+                  <span style={{ padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600,background:sevBg[inj.severity]||C.redLight,color:sevColor[inj.severity]||C.red }}>{inj.severity}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+
+
 const TournamentOrganizerDashboard = ({ user, onLogout }) => {
   const [page, setPage] = useState("overview");
 
@@ -1602,9 +2180,10 @@ const TournamentOrganizerDashboard = ({ user, onLogout }) => {
           /> 
         : <TournamentsPage/>)}
       {page==="squads" && <SquadVerificationPage/>}
-      {page!=="overview" && page!=="tournaments" && page!=="squads" && (
-        <ComingSoon icon={links.find(l=>l.id===page)?.icon} label={links.find(l=>l.id===page)?.label}/>
-      )}
+      {page==="schedule" && <OrgSchedulePage squads={squads} tournaments={tournaments}/>}
+      {page==="tagging"  && <OrgTaggingPage squads={squads}/>}
+      {page==="cards"    && <OrgCardsPage/>}
+      {page==="notifications" && <OrgNotificationsPage/>}
     </DashboardShell>
   );
 };
@@ -2110,9 +2689,9 @@ const TeamManagerDashboard = ({ user, onLogout, notifications: externalNotifs = 
         : <PlayersPage/>)}
       {page==="squad"       && <SquadBuilderPage/>}
       {page==="tournaments" && <TournamentsPage/>}
-      {page!=="overview" && page!=="players" && page!=="squad" && page!=="tournaments" && (
-        <ComingSoon icon={links.find(l=>l.id===page)?.icon} label={links.find(l=>l.id===page)?.label}/>
-      )}
+      {page==="injuries"     && <TMInjuriesPage externalNotifs={externalNotifs}/>}
+      {page==="cards"         && <TMCardsPage externalNotifs={externalNotifs}/>}
+      {page==="notifications" && <TMNotificationsPage externalNotifs={externalNotifs}/>}
     </DashboardShell>
   );
 };
@@ -2180,13 +2759,22 @@ const DataEntryDashboard = ({ user, onLogout, liveMatches, setLiveMatches }) => 
   const activeMatch = activeMatchId ? getMatch(activeMatchId) : matches.find(m => m.status === "Live");
 
   // ── CLOCK TICK ─────────────────────────────────────────────────────────────
+  const scrollRef = useRef(null);
   useEffect(() => {
     if (running && activeMatch) {
       clockRef.current = setInterval(() => {
+        // Save scroll position before state update
+        const mainEl = document.getElementById('main-content');
+        const scrollTop = mainEl ? mainEl.scrollTop : 0;
         setMatches(prev => prev.map(m =>
           m.id === activeMatch.id ? { ...m, clock: m.clock + 1 } : m
         ));
-      }, 1000); // 1s = 1min in demo mode
+        // Restore scroll position after re-render
+        requestAnimationFrame(() => {
+          const el = document.getElementById('main-content');
+          if (el) el.scrollTop = scrollTop;
+        });
+      }, 1000);
     } else {
       clearInterval(clockRef.current);
     }
@@ -3094,7 +3682,7 @@ const MasterRefereeDashboard = ({ user, onLogout, onNotify }) => {
         </div>
       ))}
       {page==="history" && <CardHistoryPage/>}
-      {page==="reports" && <ComingSoon icon="📝" label="Match Reports"/>}
+      {page==="reports" && <RefMatchReportsPage cards={cards}/>}
     </DashboardShell>
   );
 };
@@ -3429,7 +4017,7 @@ const MedicDashboard = ({ user, onLogout, onNotify }) => {
         </div>
       ))}
       {page==="injuries" && <InjuryListPage/>}
-      {page==="teams"    && <ComingSoon icon="👥" label="Team Health Overview"/>}
+      {page==="teams"    && <MedicTeamHealthPage injuries={injuries}/>}
     </DashboardShell>
   );
 };
